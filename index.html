@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="queueSyncApp">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QueueSync - Campus Queue Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body ng-controller="LoginController">
+
+  <div class="login-wrapper">
+    <!-- Decorative background shapes -->
+    <div class="bg-shape bg-shape-1"></div>
+    <div class="bg-shape bg-shape-2"></div>
+
+    <div class="login-card">
+      <!-- Branding -->
+      <div class="brand">
+        <div class="brand-icon">Q</div>
+        <h1 class="brand-name">QueueSync</h1>
+        <p class="brand-tagline">Real-time queue tracker for campus</p>
+      </div>
+
+      <!-- Success message -->
+      <div class="success-message" ng-show="loggedIn">
+        <div class="success-icon">&#10003;</div>
+        <p>Logged in as <strong>{{studentId}}</strong></p>
+      </div>
+
+      <!-- Login form -->
+      <form name="loginForm" ng-submit="handleLogin()" ng-hide="loggedIn" novalidate>
+        <div class="form-group">
+          <label for="studentId" class="form-label">Student ID</label>
+          <input
+            type="tel"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            id="studentId"
+            class="form-input"
+            placeholder="Enter your student ID"
+            ng-model="studentId"
+            ng-disabled="isSubmitting"
+            ng-class="{'input-error': errorMessage}"
+            autocomplete="off"
+          >
+          <span class="error-message" ng-show="errorMessage">{{errorMessage}}</span>
+        </div>
+
+        <button
+          type="submit"
+          class="btn-submit"
+          ng-disabled="isSubmitting || !studentId"
+          ng-class="{'btn-disabled': isSubmitting || !studentId}"
+        >
+          <span class="btn-text" ng-hide="isSubmitting">Enter QueueSync</span>
+          <span class="btn-spinner" ng-show="isSubmitting">
+            <span class="spinner"></span>
+            Signing in...
+          </span>
+        </button>
+      </form>
+
+      <!-- Footer -->
+      <div class="card-footer">
+        <p>Built for <strong>Your College Name</strong> Hackathon 2025</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
