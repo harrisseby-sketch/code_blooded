@@ -1,0 +1,166 @@
+    <div class="page-container food-view food-checkout-view">
+      <!-- Breadcrumb Navigation -->
+      <nav class="detail-nav">
+        <button type="button" class="btn-back" ng-click="goBack()" aria-label="Back">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>{{placed ? 'Back to menu' : 'Back to cart'}}</span>
+        </button>
+
+        <div class="live-pill">
+          <span class="pulse-dot active"></span>
+          <span>Checkout</span>
+        </div>
+      </nav>
+
+      <!-- ==================== Order Confirmation ==================== -->
+      <div class="food-card food-checkout-confirm" ng-if="placed && order">
+        <div class="food-confirm">
+          <div class="confirm-check">
+            <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6L9 17l-5-5"></path>
+            </svg>
+          </div>
+          <h1 class="location-title">Order placed!</h1>
+          <p class="order-sub">
+            Show this order number at the food counter to collect your order.
+          </p>
+          <div class="order-no-badge">Order {{order.orderNo}}</div>
+
+          <ul class="order-items-list">
+            <li ng-repeat="item in order.items">
+              <span>
+                {{item.emoji}} {{item.name}} <strong>&times; {{item.qty}}</strong>
+                <em class="food-line-spec" ng-if="item.spec.length">{{item.spec.join(' &middot; ')}}</em>
+              </span>
+              <span>&#8377;{{item.lineTotal}}</span>
+            </li>
+          </ul>
+
+          <div class="food-confirm-totals">
+            <div class="food-summary-row"><span>Subtotal</span><span>&#8377;{{order.subtotal}}</span></div>
+            <div class="food-summary-row"><span>{{order.taxLabel}}</span><span>&#8377;{{order.tax}}</span></div>
+            <div class="food-summary-row food-summary-total"><span>Total</span><span>&#8377;{{order.total}}</span></div>
+          </div>
+
+          <div class="food-confirm-meta">
+            <span class="food-meta-chip">{{orderTypeLabel(order.orderType)}}</span>
+            <span class="food-meta-chip">Online &middot; {{order.paymentDetail}}</span>
+            <span class="food-meta-chip" ng-if="joinedPosition">Queue spot #{{joinedPosition}}</span>
+          </div>
+
+          <div class="pickup-note">
+            <span>&#127869;</span>
+            <span>Your {{orderTypeLabel(order.orderType)}} order is confirmed. Payment of &#8377;{{order.total}} was received online via {{order.paymentDetail}} and you were added to the Canteen queue automatically.</span>
+          </div>
+
+          <div class="food-confirm-actions">
+            <button type="button" class="btn-action canteen-btn" ng-click="goHome()">
+              <span class="btn-content">Done &mdash; Go to dashboard</span>
+            </button>
+            <button type="button" class="food-btn-ghost" ng-click="goToMenu()">Order more food</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== Checkout Form ==================== -->
+      <div class="food-checkout-grid" ng-if="!placed">
+        <!-- Order + Payment Details -->
+        <form class="food-card food-form-card" name="checkoutForm" novalidate>
+          <header class="food-checkout-section-head">
+            <h2>Order details</h2>
+            <p>Set your order type and pay online to confirm.</p>
+          </header>
+
+          <div class="form-group">
+            <label class="form-label">Order type</label>
+            <div class="food-option-grid">
+              <button
+                type="button"
+                class="food-option-card"
+                ng-repeat="type in orderTypes track by type.id"
+                ng-class="{'active': customer.orderType === type.id}"
+                ng-click="customer.orderType = type.id"
+              >
+                <span class="food-option-icon">{{type.emoji}}</span>
+                <span class="food-option-name">{{type.label}}</span>
+                <span class="food-option-hint">{{type.hint}}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Payment method</label>
+            <div class="food-suboptions" ng-if="customer.payment === 'online'">
+              <span class="food-opt-label">Pay via</span>
+              <div class="food-chip-group">
+                <button
+                  type="button"
+                  class="food-chip"
+                  ng-repeat="method in onlineMethods track by method.id"
+                  ng-class="{'active': customer.paymentOnline === method.id}"
+                  ng-click="customer.paymentOnline = method.id"
+                >
+                  {{method.label}}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="foodNotes" class="form-label">
+              Notes
+              <span class="label-hint">(optional)</span>
+            </label>
+            <textarea
+              id="foodNotes"
+              class="form-input form-textarea"
+              rows="3"
+              placeholder="Any special requests? e.g. less spicy, no onions..."
+              ng-model="customer.notes"
+            ></textarea>
+          </div>
+        </form>
+
+        <!-- Final Order Summary -->
+        <aside class="food-card food-summary food-checkout-summary">
+          <h3 class="food-summary-title">Final order summary</h3>
+
+          <ul class="order-items-list food-checkout-items">
+            <li ng-repeat="line in lines">
+              <span>
+                {{line.item.emoji}} {{line.item.name}} <strong>&times; {{line.qty}}</strong>
+                <em class="food-line-spec" ng-if="line.spec.length">{{line.spec.join(' &middot; ')}}</em>
+              </span>
+              <span>&#8377;{{line.lineTotal}}</span>
+            </li>
+          </ul>
+
+          <div class="food-summary-row"><span>Subtotal</span><span>&#8377;{{summary.subtotal}}</span></div>
+          <div class="food-summary-row"><span>{{summary.taxLabel}}</span><span>&#8377;{{summary.tax}}</span></div>
+          <div class="food-summary-row food-summary-total"><span>Total</span><span>&#8377;{{summary.total}}</span></div>
+
+          <button
+            type="button"
+            class="food-btn-primary"
+            ng-click="placeOrder()"
+            ng-disabled="isPlacing"
+          >
+            <span class="btn-spinner" ng-show="isPlacing">
+              <span class="spinner"></span>
+              Placing order...
+            </span>
+            <span ng-hide="isPlacing">Place Order &middot; &#8377;{{summary.total}}</span>
+          </button>
+
+          <p class="food-safe-note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            You will receive a confirmation with a unique order number right away.
+          </p>
+        </aside>
+      </div>
+    </div>

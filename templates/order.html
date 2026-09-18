@@ -1,0 +1,117 @@
+<!-- Canteen Food Ordering Page -->
+<div class="page-container order-view">
+  <!-- Back Button & Breadcrumb Navigation -->
+  <nav class="detail-nav">
+    <button type="button" class="btn-back" ng-click="goBack()" aria-label="Back to canteen queue">
+      <svg class="back-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5"></path>
+        <path d="M12 19l-7-7 7-7"></path>
+      </svg>
+      <span>Back to queue</span>
+    </button>
+
+    <div class="live-pill">
+      <span class="pulse-dot active"></span>
+      <span>Counter 1 &amp; 2</span>
+    </div>
+  </nav>
+
+  <!-- Main Order Card -->
+  <div class="order-card">
+    <!-- Confirmation state -->
+    <div class="order-confirm" ng-if="orderPlaced && order">
+      <div class="confirm-check">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5"></path>
+        </svg>
+      </div>
+      <h1 class="location-title">Order placed!</h1>
+      <p class="order-sub">Show this order number at Counter 1 to collect your food.</p>
+      <div class="order-no-badge">Order {{order.orderNo}}</div>
+
+      <ul class="order-items-list">
+        <li ng-repeat="line in order.items">
+          <span>{{line.emoji}} {{line.itemName}} <strong>&times; {{line.qty}}</strong></span>
+          <span>&#8377;{{line.lineTotal}}</span>
+        </li>
+      </ul>
+
+      <div class="order-total-row">
+        <span>Total</span>
+        <span>&#8377;{{order.total}}</span>
+      </div>
+
+      <div class="pickup-note">
+        <span>🍽️</span>
+        <span>Your food will be served at Counter 1 right after the bill is generated.</span>
+      </div>
+
+      <button type="button" class="btn-action canteen-btn" ng-click="goHome()">
+        <span class="btn-content">Done — Go to dashboard</span>
+      </button>
+    </div>
+
+    <!-- Ordering state -->
+    <ng-form ng-if="!orderPlaced">
+      <header class="order-hero">
+        <h1>Order at the Canteen</h1>
+        <p>You're at the front of the queue — pick your items and place the order.</p>
+        <span class="counter-flag">
+          <span class="pulse-dot active"></span>
+          You are being served now
+        </span>
+      </header>
+
+      <!-- Category chips -->
+      <div class="category-chips">
+        <button type="button" class="category-chip" ng-class="{'active': activeCategory === null}" ng-click="setCategory(null)">
+          All
+        </button>
+        <button type="button"
+          class="category-chip"
+          ng-repeat="category in categories"
+          ng-class="{'active': activeCategory === category}"
+          ng-click="setCategory(category)">
+          {{category}}
+        </button>
+      </div>
+
+      <!-- Menu grid -->
+      <div class="menu-grid">
+        <div class="menu-item-card" ng-repeat="item in filteredMenu() track by item.id">
+          <div class="menu-item-emoji">{{item.emoji}}</div>
+          <div class="menu-item-info">
+            <div class="menu-item-name">
+              {{item.itemName}}
+              <span class="veg-dot" ng-class="{'non-veg': !item.veg}"></span>
+            </div>
+            <div class="menu-item-cat">{{item.category}}</div>
+            <div class="menu-item-price">&#8377;{{item.price}}</div>
+          </div>
+          <div class="add-to-cart-wrap">
+            <div class="qty-control" ng-if="cartQty(item.id) > 0">
+              <button type="button" class="qty-btn" ng-click="removeItem(item)" aria-label="Decrease {{item.itemName}}">&minus;</button>
+              <span class="qty-value">{{cartQty(item.id)}}</span>
+              <button type="button" class="qty-btn" ng-click="addItem(item)" aria-label="Increase {{item.itemName}}">+</button>
+            </div>
+            <button type="button" class="add-btn" ng-if="cartQty(item.id) === 0" ng-click="addItem(item)">Add</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty-menu" ng-if="filteredMenu().length === 0">
+        No items in this category right now.
+      </div>
+
+      <!-- Sticky cart bar -->
+      <div class="cart-bar" ng-if="cartCount > 0 && !orderPlaced">
+        <div class="cart-bar-meta">
+          {{cartCount}} item<ng-pluralize when="{'one':'','other':'s'}"></ng-pluralize> &bull; <strong>&#8377;{{cartTotal}}</strong>
+        </div>
+        <button type="button" class="cart-bar-btn" ng-click="placeOrder()" ng-disabled="isPlacing">
+          {{isPlacing ? 'Placing...' : 'Place Order'}}
+        </button>
+      </div>
+    </ng-form>
+  </div>
+</div>

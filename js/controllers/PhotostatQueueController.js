@@ -1,8 +1,10 @@
 /* ============================================
    QueueSync - PhotostatQueueController
    Detailed queue controls & live stats for Photostat.
-   Includes the dynamic user position panel, live
-   status reporting and the "you're next" flow.
+   Adds a service flow (Print / Photostat): choose a
+   service, enter page count, pay, and the user is
+   added to the queue automatically with the option
+   to exit anytime.
    ============================================ */
 
 (function () {
@@ -12,9 +14,11 @@
     '$scope',
     '$location',
     '$interval',
+    '$timeout',
+    '$window',
     'AuthService',
     'QueueService',
-    function ($scope, $location, $interval, AuthService, QueueService) {
+    function ($scope, $location, $interval, $timeout, $window, AuthService, QueueService) {
 
       // Ensure user is authenticated
       if (!AuthService.isLoggedIn()) {
@@ -38,6 +42,181 @@
         { value: 'normal', label: 'Normal' },
         { value: 'slow',   label: 'Moving slow' }
       ];
+
+      // ---- Photostat service flow state ----
+
+      $scope.photostatServices = [
+        { id: 'print',     label: 'Print',     emoji: '🖨️', pricePerPage: 5 },
+        { id: 'photostat', label: 'Photostat', emoji: '📄', pricePerPage: 2 }
+      ];
+
+      $scope.paymentMethods = [
+        { id: 'online', label: 'Online', emoji: '📱', hint: 'Pay now online' }
+      ];
+
+      $scope.onlineMethods = [
+        { id: 'upi',  label: 'UPI' },
+        { id: 'card', label: 'Card' }
+      ];
+
+      var JOB_KEY = 'queueSync_photostatJob_';
+
+      $scope.photostatService = null;
+      $scope.jobPages = null;
+      $scope.jobPayment = 'online';
+      $scope.jobPaymentOnline = 'upi';
+      $scope.photostatError = '';
+      $scope.isPaying = false;
+      $scope.job = null;
+      $scope.uploadedFiles = [];
+
+      function persistPhotostatJob() {
+        try {
+          $window.sessionStorage.setItem(JOB_KEY + $scope.studentId, JSON.stringify($scope.job));
+        } catch (e) { /* noop */ }
+      }
+
+      function restorePhotostatJob() {
+        try {
+          var raw = $window.sessionStorage.getItem(JOB_KEY + $scope.studentId);
+          $scope.job = raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          $scope.job = null;
+        }
+      }
+
+      restorePhotostatJob();
+
+      $scope.startPhotostatJob = function (serviceId) {
+        if ($scope.userStatus.joined) {
+          return;
+        }
+        for (var i = 0; i < $scope.photostatServices.length; i++) {
+          if ($scope.photostatServices[i].id === serviceId) {
+            $scope.photostatService = $scope.photostatServices[i];
+            break;
+          }
+        }
+        $scope.jobPages = 1;
+        $scope.jobPayment = 'online';
+        $scope.jobPaymentOnline = 'upi';
+        $scope.photostatError = '';
+        $scope.uploadedFiles = [];
+      };
+
+      $scope.cancelPhotostatJob = function () {
+        $scope.photostatService = null;
+        $scope.jobPages = null;
+        $scope.photostatError = '';
+        $scope.uploadedFiles = [];
+      };
+
+      $scope.photostatCost = function () {
+        if (!$scope.photostatService) {
+          return 0;
+        }
+        var pages = parseInt($scope.jobPages, 10);
+        if (!pages || pages < 1) {
+          return 0;
+        }
+        return pages * $scope.photostatService.pricePerPage;
+      };
+
+      $scope.onFilesSelected = function (files) {
+        $scope.uploadedFiles = Array.prototype.slice.call(files || []).map(function (f) {
+          return { name: f.name, size: f.size };
+        });
+        $scope.photostatError = '';
+        if (!$scope.$$phase) {
+          $scope.$apply();
+        }
+      };
+
+      $scope.formatFileSize = function (bytes) {
+        if (!bytes && bytes !== 0) { return ''; }
+        if (bytes < 1024) { return bytes + ' B'; }
+        if (bytes < 1048576) { return (bytes / 1024).toFixed(0) + ' KB'; }
+        return (bytes / 1048576).toFixed(1) + ' MB';
+      };
+
+      $scope.canSubmitPhotostatJob = function () {
+        if (!$scope.photostatService) {
+          return false;
+        }
+        var pages = parseInt($scope.jobPages, 10);
+        if (!pages || pages < 1) {
+          return false;
+        }
+        if ($scope.photostatService.id === 'print' && (!$scope.uploadedFiles || $scope.uploadedFiles.length === 0)) {
+          return false;
+        }
+        return true;
+      };
+
+      $scope.payPhotostatJob = function () {
+        if ($scope.isPaying || $scope.userStatus.joined || !$scope.photostatService) {
+          return;
+        }
+
+        var pages = parseInt($scope.jobPages, 10);
+        if (!pages || pages < 1) {
+          $scope.photostatError = 'Enter a valid number of pages.';
+          return;
+        }
+        if ($scope.photostatService.id === 'print' && (!$scope.uploadedFiles || $scope.uploadedFiles.length === 0)) {
+          $scope.photostatError = 'Upload at least one file to print.';
+          return;
+        }
+        $scope.photostatError = '';
+        $scope.isPaying = true;
+
+        var svc = $scope.photostatService;
+        var amount = pages * svc.pricePerPage;
+        var paymentLabel = 'Online (' + ($scope.jobPaymentOnline === 'card' ? 'Card' : 'UPI') + ')';
+
+        // Simulate a short payment-processing delay before auto-joining.
+        $timeout(function () {
+          $scope.job = {
+            serviceId: svc.id,
+            serviceLabel: svc.label,
+            pages: pages,
+            files: $scope.uploadedFiles.map(function (f) { return { name: f.name, size: f.size }; }),
+            amount: amount,
+            paymentMethod: $scope.jobPayment,
+            paymentLabel: paymentLabel,
+            orderNo: 'PS-' + Math.floor(10000 + Math.random() * 90000),
+            paidAt: new Date()
+          };
+          persistPhotostatJob();
+
+          QueueService.joinQueue('photostat', $scope.studentId)
+            .then(function () {
+              refresh();
+              QueueService.showToast(
+                'Payment done \u2014 ' + $scope.job.serviceLabel + ' Job ' + $scope.job.orderNo + ' placed. You joined the queue!',
+                'success'
+              );
+            })
+            .catch(function (err) {
+              console.error('Auto-join failed:', err);
+              QueueService.showToast('Payment done, but we could not join the queue. Please try again.', 'warning');
+            })
+            .finally(function () {
+              $scope.isPaying = false;
+            });
+        }, 900);
+      };
+
+      $scope.confirmedJob = function () {
+        return $scope.job || {
+          serviceLabel: 'Printing / Photocopy',
+          pages: '\u2014',
+          files: [],
+          amount: '\u2014',
+          paymentLabel: '\u2014',
+          orderNo: '\u2014'
+        };
+      };
 
       /**
        * Refreshes everything bound to this page (queue, info, positions).
@@ -65,26 +244,7 @@
       refresh();
 
       /**
-       * Join Photostat Shop Queue
-       */
-      $scope.joinQueue = function () {
-        if ($scope.isUpdating || $scope.userStatus.joined) {
-          return;
-        }
-
-        $scope.isUpdating = true;
-        QueueService.joinQueue('photostat', $scope.studentId)
-          .then(function () { refresh(); })
-          .catch(function (err) {
-            console.error('Failed to join queue:', err);
-          })
-          .finally(function () {
-            $scope.isUpdating = false;
-          });
-      };
-
-      /**
-       * Leave Photostat Shop Queue
+       * Leave Photostat Shop Queue (also clears the confirmed job).
        */
       $scope.leaveQueue = function () {
         if ($scope.isUpdating || !$scope.userStatus.joined) {
@@ -93,7 +253,13 @@
 
         $scope.isUpdating = true;
         QueueService.leaveQueue('photostat', $scope.studentId)
-          .then(function () { refresh(); })
+          .then(function () {
+            $scope.job = null;
+            try {
+              $window.sessionStorage.removeItem(JOB_KEY + $scope.studentId);
+            } catch (e) { /* noop */ }
+            refresh();
+          })
           .catch(function (err) {
             console.error('Failed to leave queue:', err);
           })

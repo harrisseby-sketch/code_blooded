@@ -66,21 +66,15 @@
 
       /**
        * Join Canteen Queue
+       * Canteen uses a checkout-first flow: the user is added to the queue
+       * automatically after their food order is paid online. A direct
+       * join is intentionally not offered on the queue tab.
        */
       $scope.joinQueue = function () {
         if ($scope.isUpdating || $scope.userStatus.joined) {
           return;
         }
-
-        $scope.isUpdating = true;
-        QueueService.joinQueue('canteen', $scope.studentId)
-          .then(function () { refresh(); })
-          .catch(function (err) {
-            console.error('Failed to join queue:', err);
-          })
-          .finally(function () {
-            $scope.isUpdating = false;
-          });
+        QueueService.showToast('Order food and pay online to join the queue automatically.', 'info');
       };
 
       /**
@@ -137,6 +131,13 @@
 
       $scope.goToProfile = function () {
         $location.path('/profile');
+      };
+
+      /**
+       * Jump straight to the standalone food ordering flow.
+       */
+      $scope.goToOrder = function () {
+        $location.path('/food');
       };
 
       // Periodic refresh keeps "Right now" advice + positions live.

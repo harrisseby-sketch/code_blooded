@@ -34,6 +34,22 @@
           templateUrl: 'templates/photostat-queue.html',
           controller: 'PhotostatQueueController'
         })
+        .when('/order/canteen', {
+          templateUrl: 'templates/order.html',
+          controller: 'OrderController'
+        })
+        .when('/food', {
+          templateUrl: 'templates/food.html',
+          controller: 'FoodController'
+        })
+        .when('/food/cart', {
+          templateUrl: 'templates/food-cart.html',
+          controller: 'FoodCartController'
+        })
+        .when('/food/checkout', {
+          templateUrl: 'templates/food-checkout.html',
+          controller: 'FoodCheckoutController'
+        })
         .when('/profile', {
           templateUrl: 'templates/profile.html',
           controller: 'ProfileController'
@@ -50,13 +66,32 @@
     '$location',
     'AuthService',
     'QueueService',
-    function ($rootScope, $location, AuthService, QueueService) {
+    'FoodOrderService',
+    function ($rootScope, $location, AuthService, QueueService, FoodOrderService) {
       // Expose services to root scope for layout components (navbar, toast, banner)
       $rootScope.auth = AuthService;
       $rootScope.toast = QueueService.toastState;
 
       // Global "You're next" notification state (rendered app-wide in index.html)
       $rootScope.nextNotification = QueueService.nextNotification;
+
+      /**
+       * Cart badge state for the Food tab in the top navbar.
+       */
+      $rootScope.foodCartCount = FoodOrderService.getCartItemCount();
+      $rootScope.$on('food:cartUpdated', function () {
+        $rootScope.foodCartCount = FoodOrderService.getCartItemCount();
+      });
+      $rootScope.$on('$routeChangeSuccess', function () {
+        $rootScope.foodCartCount = FoodOrderService.getCartItemCount();
+      });
+
+      /**
+       * Global navigation to the campus Food ordering tab (navbar link)
+       */
+      $rootScope.goToFood = function () {
+        $location.path('/food');
+      };
 
       /**
        * Global Logout action accessible from top navbar.

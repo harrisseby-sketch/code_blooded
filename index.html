@@ -451,6 +451,10 @@
         </div>
       </nav>
 
+
+      <!-- Canteen Queue Pane -->
+      <div class="canteen-pane">
+
       <!-- Main Detail Card -->
       <div class="detail-card">
 
@@ -561,7 +565,7 @@
               You are not currently in this queue
             </div>
             <div class="banner-desc" ng-if="!userStatus.joined">
-              Tap <strong>Join queue</strong> below to secure your spot without standing in line.
+              Place a food order and pay online to join the queue automatically &mdash; no need to stand in line.
             </div>
           </div>
         </div>
@@ -590,6 +594,14 @@
           </div>
         </div>
 
+        <!-- Order Food CTA (visible only at the front of the queue) -->
+        <div class="order-cta" ng-if="userStatus.position === 1">
+          <button type="button" class="btn-action canteen-btn" ng-click="goToOrder()">
+            <span class="btn-content">🍽️ Order Food at Counter 1</span>
+          </button>
+          <p class="order-cta-hint">You're at the counter — place your food order now.</p>
+        </div>
+
         <!-- Live Status Reporting (only while joined) -->
         <div class="live-status-report" ng-if="userStatus.joined">
           <div class="report-title">How is the Canteen queue moving right now?</div>
@@ -609,44 +621,49 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="action-buttons-group">
-          <!-- Join Queue Button -->
+        <div class="action-buttons-group action-buttons-center">
+          <!-- Not joined: order & pay first, queue entry is automatic -->
           <button
             type="button"
             class="btn-action btn-join canteen-btn"
-            ng-click="joinQueue()"
-            ng-disabled="isUpdating || userStatus.joined"
-            ng-class="{'btn-disabled': isUpdating || userStatus.joined}"
+            ng-if="!userStatus.joined"
+            ng-click="goToOrder()"
           >
-            <span class="btn-spinner" ng-show="isUpdating">
-              <span class="spinner"></span>
-              Updating queue...
-            </span>
-            <span class="btn-content" ng-hide="isUpdating">
+            <span class="btn-content">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                <line x1="6" y1="1" x2="6" y2="4"></line>
+                <line x1="10" y1="1" x2="10" y2="4"></line>
+                <line x1="14" y1="1" x2="14" y2="4"></line>
               </svg>
-              <span ng-if="!userStatus.joined">Join queue</span>
-              <span ng-if="userStatus.joined">Already Joined</span>
+              <span>Order Food &amp; Join Queue</span>
             </span>
           </button>
+          <p class="order-cta-hint" ng-if="!userStatus.joined">
+            You will be added to the queue automatically once your food order is paid online.
+          </p>
 
-          <!-- Leave Queue Button -->
+          <!-- Joined: exit the queue -->
           <button
             type="button"
             class="btn-action btn-leave"
+            ng-if="userStatus.joined"
             ng-click="leaveQueue()"
-            ng-disabled="isUpdating || !userStatus.joined || queueInfo.peopleCount === 0"
-            ng-class="{'btn-disabled': isUpdating || !userStatus.joined || queueInfo.peopleCount === 0}"
+            ng-disabled="isUpdating"
+            ng-class="{'btn-disabled': isUpdating}"
           >
+            <span class="btn-spinner" ng-show="isUpdating">
+              <span class="spinner"></span>
+              Leaving queue...
+            </span>
             <span class="btn-content" ng-hide="isUpdating">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                 <polyline points="16 17 21 12 16 7"></polyline>
                 <line x1="21" y1="12" x2="9" y2="12"></line>
               </svg>
-              <span>Leave queue</span>
+              <span>Exit queue</span>
             </span>
           </button>
         </div>
@@ -658,6 +675,8 @@
         </footer>
 
       </div>
+      </div><!-- /.canteen-pane queue -->
+
     </div>
   </script>
 
@@ -798,7 +817,7 @@
               You are not currently in this queue
             </div>
             <div class="banner-desc" ng-if="!userStatus.joined">
-              Tap <strong>Join queue</strong> below to secure your spot for printing or photocopying.
+              Choose <strong>Print</strong> or <strong>Photostat</strong>, enter your page count and pay to join the queue automatically.
             </div>
           </div>
         </div>
@@ -845,48 +864,180 @@
           <p class="report-note" ng-if="myStatus">You reported: <strong>{{myStatus}}</strong> - thanks for keeping it live!</p>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="action-buttons-group">
-          <!-- Join Queue Button -->
-          <button
-            type="button"
-            class="btn-action btn-join photostat-btn"
-            ng-click="joinQueue()"
-            ng-disabled="isUpdating || userStatus.joined"
-            ng-class="{'btn-disabled': isUpdating || userStatus.joined}"
-          >
-            <span class="btn-spinner" ng-show="isUpdating">
-              <span class="spinner"></span>
-              Updating queue...
-            </span>
-            <span class="btn-content" ng-hide="isUpdating">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span ng-if="!userStatus.joined">Join queue</span>
-              <span ng-if="userStatus.joined">Already Joined</span>
-            </span>
-          </button>
+        <!-- Photostat Service Flow: Print / Photostat with payment & auto-join -->
+        <div class="photostat-service">
 
-          <!-- Leave Queue Button -->
-          <button
-            type="button"
-            class="btn-action btn-leave"
-            ng-click="leaveQueue()"
-            ng-disabled="isUpdating || !userStatus.joined || queueInfo.peopleCount === 0"
-            ng-class="{'btn-disabled': isUpdating || !userStatus.joined || queueInfo.peopleCount === 0}"
-          >
-            <span class="btn-content" ng-hide="isUpdating">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                <polyline points="16 17 21 12 16 7"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
+          <!-- Not joined: choose a service -->
+          <div class="photostat-service-panel photostat-service-select" ng-if="!userStatus.joined && !photostatService">
+            <div class="photostat-service-intro">
+              <span class="photostat-pulse pulse-dot active"></span>
+              <strong>Choose a service</strong>
+              <p>Enter your page count, pay for the job and you are added to the queue automatically.</p>
+            </div>
+
+            <div class="food-option-grid photostat-option-grid">
+              <button
+                type="button"
+                class="food-option-card photostat-option-card"
+                ng-repeat="svc in photostatServices track by svc.id"
+                ng-click="startPhotostatJob(svc.id)"
+              >
+                <span class="food-option-icon">{{svc.emoji}}</span>
+                <span class="food-option-name">{{svc.label}}</span>
+                <span class="food-option-hint">&#8377;{{svc.pricePerPage}} per page</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Not joined: page count + payment form -->
+          <div class="photostat-service-panel photostat-job-form" ng-if="!userStatus.joined && photostatService">
+            <header class="photostat-job-head">
+              <div class="photostat-job-title">
+                <span class="photostat-job-emoji">{{photostatService.emoji}}</span>
+                <div>
+                  <strong>{{photostatService.label}} job</strong>
+                  <span class="photostat-job-rate">&#8377;{{photostatService.pricePerPage}} per page</span>
+                </div>
+              </div>
+              <button type="button" class="photostat-back-btn" ng-click="cancelPhotostatJob()">&#8592; Change service</button>
+            </header>
+
+            <div class="form-group">
+              <label for="photostatPages" class="form-label">Number of pages</label>
+              <input
+                type="number"
+                id="photostatPages"
+                class="form-input"
+                min="1"
+                max="1000"
+                ng-model="jobPages"
+                ng-class="{'input-error': photostatError === 'Enter a valid number of pages.'}"
+                placeholder="e.g. 20"
+              >
+              <span class="error-message" ng-show="photostatError === 'Enter a valid number of pages.'">{{photostatError}}</span>
+            </div>
+
+            <!-- File upload (Print jobs only) -->
+            <div class="form-group" ng-if="photostatService.id === 'print'">
+              <label for="photostatFiles" class="form-label">
+                Upload file(s) to print
+                <span class="label-hint">(PDF / images)</span>
+              </label>
+              <input
+                type="file"
+                id="photostatFiles"
+                class="form-input photostat-file-input"
+                multiple
+                onchange="angular.element(this).scope().onFilesSelected(this.files)"
+              >
+              <span class="error-message" ng-show="photostatError === 'Upload at least one file to print.'">{{photostatError}}</span>
+              <div class="photostat-file-list" ng-if="uploadedFiles && uploadedFiles.length">
+                <span class="photostat-file-chip" ng-repeat="f in uploadedFiles track by $index">
+                  &#128206; {{f.name}} <em>{{formatFileSize(f.size)}}</em>
+                </span>
+              </div>
+            </div>
+
+            <!-- Cost breakdown -->
+            <div class="photostat-cost-box">
+              <div class="food-summary-row">
+                <span>{{photostatService.label}} &times; {{jobPages || 0}}</span>
+                <span>&#8377;{{photostatCost()}}</span>
+              </div>
+              <div class="food-summary-row food-summary-total">
+                <span>Total to pay</span>
+                <span>&#8377;{{photostatCost()}}</span>
+              </div>
+            </div>
+
+            <!-- Payment method -->
+            <div class="form-group">
+              <label class="form-label">Payment method</label>
+              <div class="food-suboptions" ng-if="jobPayment === 'online'">
+                <span class="food-opt-label">Pay via</span>
+                <div class="food-chip-group">
+                  <button
+                    type="button"
+                    class="food-chip"
+                    ng-repeat="method in onlineMethods track by method.id"
+                    ng-class="{'active': jobPaymentOnline === method.id}"
+                    ng-click="jobPaymentOnline = method.id"
+                  >
+                    {{method.label}}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="btn-action photostat-btn"
+              ng-click="payPhotostatJob()"
+              ng-disabled="isPaying || !canSubmitPhotostatJob()"
+              ng-class="{'btn-disabled': isPaying || !canSubmitPhotostatJob()}"
+            >
+              <span class="btn-spinner" ng-show="isPaying">
+                <span class="spinner"></span>
+                Processing payment &amp; joining queue...
+              </span>
+              <span class="btn-content" ng-hide="isPaying">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Pay &#8377;{{photostatCost()}} &amp; Join Queue
+              </span>
+            </button>
+
+            <p class="photostat-job-note">Once paid, you are added to the queue automatically and may exit anytime.</p>
+          </div>
+
+          <!-- Joined: job confirmed + exit queue -->
+          <div class="photostat-service-panel photostat-confirm" ng-if="userStatus.joined">
+            <div class="confirm-check">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5"></path>
               </svg>
-              <span>Leave queue</span>
-            </span>
-          </button>
-        </div>
+            </div>
+            <h3 class="photostat-confirm-title">Job confirmed &mdash; you are in the queue!</h3>
+
+            <div class="photostat-confirm-box">
+              <div class="food-summary-row"><span>Service</span><strong>{{confirmedJob().serviceLabel}}</strong></div>
+              <div class="food-summary-row"><span>Pages</span><strong>{{confirmedJob().pages}}</strong></div>
+              <div class="food-summary-row" ng-if="confirmedJob().serviceId === 'print'"><span>Files</span><strong>{{confirmedJob().files.length}} uploaded</strong></div>
+              <div class="food-summary-row"><span>Amount paid</span><strong>&#8377;{{confirmedJob().amount}}</strong></div>
+              <div class="food-summary-row"><span>Paid via</span><strong>{{confirmedJob().paymentLabel}}</strong></div>
+              <div class="food-summary-row"><span>Job no.</span><strong>{{confirmedJob().orderNo}}</strong></div>
+            </div>
+
+            <ul class="photostat-confirm-files" ng-if="confirmedJob().serviceId === 'print' && confirmedJob().files && confirmedJob().files.length">
+              <li ng-repeat="f in confirmedJob().files track by $index">&#128206; {{f.name}} <em>{{formatFileSize(f.size)}}</em></li>
+            </ul>
+
+            <p class="photostat-confirm-note">Your spot is <strong>#{{userStatus.position}}</strong> with {{userStatus.peopleAhead}} people ahead. Show your job number when you reach the counter.</p>
+
+            <button
+              type="button"
+              class="btn-action btn-leave"
+              ng-click="leaveQueue()"
+              ng-disabled="isUpdating"
+              ng-class="{'btn-disabled': isUpdating}"
+            >
+              <span class="btn-spinner" ng-show="isUpdating">
+                <span class="spinner"></span>
+                Leaving queue...
+              </span>
+              <span class="btn-content" ng-hide="isUpdating">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                Exit queue
+              </span>
+            </button>
+          </div>
+
+        </div><!-- /.photostat-service -->
 
         <!-- Real-Time Sync Notice -->
         <footer class="detail-footer-note">
@@ -894,6 +1045,127 @@
           <p>Updates are live and visible to all users &bull; Simulating real-time campus data (Firebase-ready)</p>
         </footer>
 
+      </div>
+    </div>
+  </script>
+
+  <!-- Canteen Food Ordering Template -->
+  <script type="text/ng-template" id="templates/order.html">
+    <!-- Canteen Food Ordering Page -->
+    <div class="page-container order-view">
+      <!-- Back Button & Breadcrumb Navigation -->
+      <nav class="detail-nav">
+        <button type="button" class="btn-back" ng-click="goBack()" aria-label="Back to canteen queue">
+          <svg class="back-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5"></path>
+            <path d="M12 19l-7-7 7-7"></path>
+          </svg>
+          <span>Back to queue</span>
+        </button>
+
+        <div class="live-pill">
+          <span class="pulse-dot active"></span>
+          <span>Counter 1 &amp; 2</span>
+        </div>
+      </nav>
+
+      <!-- Main Order Card -->
+      <div class="order-card">
+        <!-- Confirmation state -->
+        <div class="order-confirm" ng-if="orderPlaced && order">
+          <div class="confirm-check">
+            <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6L9 17l-5-5"></path>
+            </svg>
+          </div>
+          <h1 class="location-title">Order placed!</h1>
+          <p class="order-sub">Show this order number at Counter 1 to collect your food.</p>
+          <div class="order-no-badge">Order {{order.orderNo}}</div>
+
+          <ul class="order-items-list">
+            <li ng-repeat="line in order.items">
+              <span>{{line.emoji}} {{line.itemName}} <strong>&times; {{line.qty}}</strong></span>
+              <span>&#8377;{{line.lineTotal}}</span>
+            </li>
+          </ul>
+
+          <div class="order-total-row">
+            <span>Total</span>
+            <span>&#8377;{{order.total}}</span>
+          </div>
+
+          <div class="pickup-note">
+            <span>🍽️</span>
+            <span>Your food will be served at Counter 1 right after the bill is generated.</span>
+          </div>
+
+          <button type="button" class="btn-action canteen-btn" ng-click="goHome()">
+            <span class="btn-content">Done — Go to dashboard</span>
+          </button>
+        </div>
+
+        <!-- Ordering state -->
+        <ng-form ng-if="!orderPlaced">
+          <header class="order-hero">
+            <h1>Order at the Canteen</h1>
+            <p>You're at the front of the queue — pick your items and place the order.</p>
+            <span class="counter-flag">
+              <span class="pulse-dot active"></span>
+              You are being served now
+            </span>
+          </header>
+
+          <!-- Category chips -->
+          <div class="category-chips">
+            <button type="button" class="category-chip" ng-class="{'active': activeCategory === null}" ng-click="setCategory(null)">
+              All
+            </button>
+            <button type="button"
+              class="category-chip"
+              ng-repeat="category in categories"
+              ng-class="{'active': activeCategory === category}"
+              ng-click="setCategory(category)">
+              {{category}}
+            </button>
+          </div>
+
+          <!-- Menu grid -->
+          <div class="menu-grid">
+            <div class="menu-item-card" ng-repeat="item in filteredMenu() track by item.id">
+              <div class="menu-item-emoji">{{item.emoji}}</div>
+              <div class="menu-item-info">
+                <div class="menu-item-name">
+                  {{item.itemName}}
+                  <span class="veg-dot" ng-class="{'non-veg': !item.veg}"></span>
+                </div>
+                <div class="menu-item-cat">{{item.category}}</div>
+                <div class="menu-item-price">&#8377;{{item.price}}</div>
+              </div>
+              <div class="add-to-cart-wrap">
+                <div class="qty-control" ng-if="cartQty(item.id) > 0">
+                  <button type="button" class="qty-btn" ng-click="removeItem(item)" aria-label="Decrease {{item.itemName}}">&minus;</button>
+                  <span class="qty-value">{{cartQty(item.id)}}</span>
+                  <button type="button" class="qty-btn" ng-click="addItem(item)" aria-label="Increase {{item.itemName}}">+</button>
+                </div>
+                <button type="button" class="add-btn" ng-if="cartQty(item.id) === 0" ng-click="addItem(item)">Add</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty-menu" ng-if="filteredMenu().length === 0">
+            No items in this category right now.
+          </div>
+
+          <!-- Sticky cart bar -->
+          <div class="cart-bar" ng-if="cartCount > 0 && !orderPlaced">
+            <div class="cart-bar-meta">
+              {{cartCount}} item<ng-pluralize when="{'one':'','other':'s'}"></ng-pluralize> &bull; <strong>&#8377;{{cartTotal}}</strong>
+            </div>
+            <button type="button" class="cart-bar-btn" ng-click="placeOrder()" ng-disabled="isPlacing">
+              {{isPlacing ? 'Placing...' : 'Place Order'}}
+            </button>
+          </div>
+        </ng-form>
       </div>
     </div>
   </script>
@@ -1009,6 +1281,472 @@
     </div>
   </script>
 
+  <!-- Food Ordering Templates (Menu / Cart / Checkout) -->
+  <script type="text/ng-template" id="templates/food.html">
+    <div class="page-container food-view food-menu-view">
+      <!-- Breadcrumb Navigation -->
+      <nav class="detail-nav">
+        <button type="button" class="btn-back" ng-click="goBack()" aria-label="Back to queues">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>Back to queues</span>
+        </button>
+
+        <div class="live-pill">
+          <span class="pulse-dot active"></span>
+          <span>Canteen Food</span>
+        </div>
+      </nav>
+
+      <!-- Loading State -->
+      <div class="food-loading" ng-if="loading" aria-label="Loading food menu">
+        <div class="food-skeleton" ng-repeat="n in [1,2,3,4]"></div>
+      </div>
+
+      <div ng-if="!loading">
+        <!-- Hero -->
+        <header class="food-hero">
+          <div class="hero-badge">
+            <span class="pulse-dot active"></span>
+            <span>Live Food Menu</span>
+          </div>
+          <h1 class="hero-title">Order Food Online</h1>
+          <p class="hero-subtitle">
+            Pick a dish, customise it your way, and skip the queue. Your order is ready when you arrive.
+          </p>
+        </header>
+
+        <!-- Search Bar -->
+        <div class="food-toolbar">
+          <div class="food-search">
+            <svg class="food-search-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="search"
+              class="form-input food-search-input"
+              placeholder="Search biriyani, alfam, meals, chapathi..."
+              ng-model="search"
+              aria-label="Search food items"
+            >
+          </div>
+        </div>
+
+        <!-- Category Tabs -->
+        <div class="food-tabs">
+          <button
+            type="button"
+            class="food-tab"
+            ng-repeat="category in categories track by $index"
+            ng-class="{'active': activeCategory === category}"
+            ng-click="setCategory(category)"
+          >
+            {{category}}
+          </button>
+        </div>
+
+        <!-- Food Cards Grid -->
+        <div class="food-grid">
+          <div
+            class="food-card"
+            ng-repeat="item in filteredMenu() track by item.id"
+            ng-class="{'food-card-off': !item.available}"
+          >
+            <div class="food-media" ng-class="'food-media-' + item.category.toLowerCase()">
+              <span class="food-media-emoji" ng-hide="!item.available">{{item.emoji}}</span>
+              <span class="food-media-emoji muted" ng-show="!item.available">&#128683;</span>
+            </div>
+
+            <div class="food-card-body">
+              <div class="food-card-head">
+                <h3 class="food-card-name">{{item.name}}</h3>
+                <span class="veg-dot" ng-class="{'non-veg': !item.veg}" title="{{item.veg ? 'Veg' : 'Non-veg'}}"></span>
+                <span class="food-avail" ng-show="item.available">Available</span>
+                <span class="food-avail off" ng-show="!item.available">Unavailable</span>
+              </div>
+
+              <p class="food-desc">{{item.description}}</p>
+
+              <!-- Customization options -->
+              <div class="food-custom" ng-repeat="option in item.options">
+                <span class="food-opt-label">{{option.label}}</span>
+                <div class="food-chip-group">
+                  <button
+                    type="button"
+                    class="food-chip"
+                    ng-repeat="choice in option.choices track by choice.id"
+                    ng-class="{'active': isSelected(item, option, choice)}"
+                    ng-click="select(item, option, choice)"
+                    ng-disabled="!item.available"
+                  >
+                    {{choice.label}}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Price + quantity + add to cart -->
+              <div class="food-card-foot">
+                <div class="food-price">
+                  <span class="food-price-value">&#8377;{{cardPrice(item)}}</span>
+                  <span class="food-price-sub">
+                    {{qty[item.id]}} &times; &#8377;{{unitPrice(item)}}{{item.unitHint ? ' ' + item.unitHint : ''}}<span ng-if="addonTotal(item) > 0"> &middot; incl. add-ons</span>
+                  </span>
+                </div>
+
+                <div class="food-add-wrap">
+                  <span class="food-in-cart" ng-if="inCartCount(item) > 0">
+                    &#10004; {{inCartCount(item)}} in cart
+                  </span>
+                  <div class="food-qty-control">
+                    <button type="button" class="food-qty-btn" ng-click="decQty(item)" ng-disabled="qty[item.id] <= 1 || !item.available" aria-label="Decrease quantity">&minus;</button>
+                    <span class="food-qty-value">{{qty[item.id]}}</span>
+                    <button type="button" class="food-qty-btn" ng-click="incQty(item)" ng-disabled="qty[item.id] >= 10 || !item.available" aria-label="Increase quantity">+</button>
+                  </div>
+                  <button
+                    type="button"
+                    class="food-add-btn"
+                    ng-click="addToCart(item)"
+                    ng-disabled="!item.available"
+                  >
+                    <span ng-hide="!item.available">Add to Cart</span>
+                    <span ng-show="!item.available">Sold out</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty search / category state -->
+        <div class="food-empty" ng-if="filteredMenu().length === 0">
+          <div class="empty-illustration">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          <p class="empty-title">No dishes found</p>
+          <p class="empty-desc">Try a different search term or category.</p>
+        </div>
+      </div>
+
+      <!-- Sticky View Cart Bar -->
+      <div class="food-sticky-bar" ng-if="!loading && summary().count > 0">
+        <div class="food-sticky-meta">
+          <span>{{summary().count}} item{{summary().count > 1 ? 's' : ''}}</span>
+          <strong>&#8377;{{summary().subtotal}}</strong>
+        </div>
+        <button type="button" class="food-sticky-btn" ng-click="goToCart()">
+          View Cart
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </script>
+
+  <script type="text/ng-template" id="templates/food-cart.html">
+    <div class="page-container food-view food-cart-view">
+      <!-- Breadcrumb Navigation -->
+      <nav class="detail-nav">
+        <button type="button" class="btn-back" ng-click="goBack()" aria-label="Back to food menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>Back to menu</span>
+        </button>
+
+        <div class="live-pill">
+          <span class="pulse-dot active"></span>
+          <span>Your Cart</span>
+        </div>
+      </nav>
+
+      <!-- Loading State -->
+      <div class="food-loading" ng-if="loading" aria-label="Loading your cart">
+        <div class="food-skeleton" ng-repeat="n in [1,2,3]"></div>
+      </div>
+
+      <div ng-if="!loading">
+        <div class="food-cart-wrap">
+          <header class="food-cart-head">
+            <div>
+              <h1 class="hero-title">Your Cart</h1>
+              <p class="order-sub" ng-if="summary.count > 0">
+                {{summary.lineCount}} item type{{summary.lineCount > 1 ? 's' : ''}} &middot; {{summary.count}} unit{{summary.count > 1 ? 's' : ''}} in total
+              </p>
+            </div>
+            <button type="button" class="food-btn-ghost food-clear-btn" ng-if="summary.count > 0" ng-click="clearCart()">
+              Clear cart
+            </button>
+          </header>
+
+          <!-- Empty Cart State -->
+          <div class="food-cart-empty" ng-if="summary.count === 0">
+            <div class="empty-illustration">
+              <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="9" cy="21" r="1"></circle>
+                <circle cx="20" cy="21" r="1"></circle>
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+              </svg>
+            </div>
+            <p class="empty-title">Your cart is empty</p>
+            <p class="empty-desc">Browse the menu, pick a dish and add it to your cart.</p>
+            <button type="button" class="food-btn-primary" ng-click="goBack()">Browse menu</button>
+          </div>
+
+          <!-- Cart Lines + Summary -->
+          <div class="food-cart-grid" ng-if="summary.count > 0">
+            <div class="food-cart-lines">
+              <div class="food-cart-line" ng-repeat="line in lines track by line.key">
+                <div class="food-cart-media">{{line.item.emoji}}</div>
+
+                <div class="food-cart-main">
+                  <div class="food-cart-top">
+                    <div class="food-cart-title-wrap">
+                      <span class="food-cart-name">{{line.item.name}}</span>
+                      <span class="food-cart-spec" ng-if="line.spec.length">{{line.spec.join(' &middot; ')}}</span>
+                    </div>
+                    <button type="button" class="food-remove-btn" ng-click="removeLine(line)" aria-label="Remove {{line.item.name}} from cart">&times;</button>
+                  </div>
+
+                  <!-- Live customization editor -->
+                  <div class="food-custom" ng-repeat="option in line.item.options">
+                    <span class="food-opt-label">{{option.label}}</span>
+                    <div class="food-chip-group">
+                      <button
+                        type="button"
+                        class="food-chip"
+                        ng-repeat="choice in option.choices track by choice.id"
+                        ng-class="{'active': isSelected(line, option, choice)}"
+                        ng-click="select(line, option, choice)"
+                      >
+                        {{choice.label}}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="food-cart-bottom">
+                    <div class="food-qty-control">
+                      <button type="button" class="food-qty-btn" ng-click="decQty(line)" ng-disabled="line.qty <= 1" aria-label="Decrease quantity">&minus;</button>
+                      <span class="food-qty-value">{{line.qty}}</span>
+                      <button type="button" class="food-qty-btn" ng-click="incQty(line)" ng-disabled="line.qty >= 10" aria-label="Increase quantity">+</button>
+                    </div>
+                    <div class="food-cart-pricing">
+                      <span class="food-cart-price">&#8377;{{line.lineTotal}}</span>
+                      <span class="food-price-sub">
+                        {{line.qty}} &times; &#8377;{{line.unitPrice}}<span ng-if="line.addonTotal > 0"> + &#8377;{{line.addonTotal}} add-ons</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside class="food-summary">
+              <h3 class="food-summary-title">Order Summary</h3>
+              <div class="food-summary-row">
+                <span>Subtotal</span>
+                <span>&#8377;{{summary.subtotal}}</span>
+              </div>
+              <div class="food-summary-row">
+                <span>{{summary.taxLabel}}</span>
+                <span>&#8377;{{summary.tax}}</span>
+              </div>
+              <div class="food-summary-row food-summary-total">
+                <span>Total</span>
+                <span>&#8377;{{summary.total}}</span>
+              </div>
+              <button type="button" class="food-btn-primary" ng-click="goToCheckout()">
+                Checkout
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              </button>
+              <button type="button" class="food-btn-ghost" ng-click="goBack()">Continue shopping</button>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  </script>
+
+  <script type="text/ng-template" id="templates/food-checkout.html">
+    <div class="page-container food-view food-checkout-view">
+      <!-- Breadcrumb Navigation -->
+      <nav class="detail-nav">
+        <button type="button" class="btn-back" ng-click="goBack()" aria-label="Back">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>{{placed ? 'Back to menu' : 'Back to cart'}}</span>
+        </button>
+
+        <div class="live-pill">
+          <span class="pulse-dot active"></span>
+          <span>Checkout</span>
+        </div>
+      </nav>
+
+      <!-- ==================== Order Confirmation ==================== -->
+      <div class="food-card food-checkout-confirm" ng-if="placed && order">
+        <div class="food-confirm">
+          <div class="confirm-check">
+            <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6L9 17l-5-5"></path>
+            </svg>
+          </div>
+          <h1 class="location-title">Order placed!</h1>
+          <p class="order-sub">
+            Show this order number at the food counter to collect your order.
+          </p>
+          <div class="order-no-badge">Order {{order.orderNo}}</div>
+
+          <ul class="order-items-list">
+            <li ng-repeat="item in order.items">
+              <span>
+                {{item.emoji}} {{item.name}} <strong>&times; {{item.qty}}</strong>
+                <em class="food-line-spec" ng-if="item.spec.length">{{item.spec.join(' &middot; ')}}</em>
+              </span>
+              <span>&#8377;{{item.lineTotal}}</span>
+            </li>
+          </ul>
+
+          <div class="food-confirm-totals">
+            <div class="food-summary-row"><span>Subtotal</span><span>&#8377;{{order.subtotal}}</span></div>
+            <div class="food-summary-row"><span>{{order.taxLabel}}</span><span>&#8377;{{order.tax}}</span></div>
+            <div class="food-summary-row food-summary-total"><span>Total</span><span>&#8377;{{order.total}}</span></div>
+          </div>
+
+          <div class="food-confirm-meta">
+            <span class="food-meta-chip">{{orderTypeLabel(order.orderType)}}</span>
+            <span class="food-meta-chip">Online &middot; {{order.paymentDetail}}</span>
+            <span class="food-meta-chip" ng-if="joinedPosition">Queue spot #{{joinedPosition}}</span>
+          </div>
+
+          <div class="pickup-note">
+            <span>&#127869;</span>
+            <span>Your {{orderTypeLabel(order.orderType)}} order is confirmed. Payment of &#8377;{{order.total}} was received online via {{order.paymentDetail}} and you were added to the Canteen queue automatically.</span>
+          </div>
+
+          <div class="food-confirm-actions">
+            <button type="button" class="btn-action canteen-btn" ng-click="goHome()">
+              <span class="btn-content">Done &mdash; Go to dashboard</span>
+            </button>
+            <button type="button" class="food-btn-ghost" ng-click="goToMenu()">Order more food</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== Checkout Form ==================== -->
+      <div class="food-checkout-grid" ng-if="!placed">
+        <!-- Order + Payment Details -->
+        <form class="food-card food-form-card" name="checkoutForm" novalidate>
+          <header class="food-checkout-section-head">
+            <h2>Order details</h2>
+            <p>Set your order type and pay online to confirm.</p>
+          </header>
+
+          <div class="form-group">
+            <label class="form-label">Order type</label>
+            <div class="food-option-grid">
+              <button
+                type="button"
+                class="food-option-card"
+                ng-repeat="type in orderTypes track by type.id"
+                ng-class="{'active': customer.orderType === type.id}"
+                ng-click="customer.orderType = type.id"
+              >
+                <span class="food-option-icon">{{type.emoji}}</span>
+                <span class="food-option-name">{{type.label}}</span>
+                <span class="food-option-hint">{{type.hint}}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Payment method</label>
+            <div class="food-suboptions" ng-if="customer.payment === 'online'">
+              <span class="food-opt-label">Pay via</span>
+              <div class="food-chip-group">
+                <button
+                  type="button"
+                  class="food-chip"
+                  ng-repeat="method in onlineMethods track by method.id"
+                  ng-class="{'active': customer.paymentOnline === method.id}"
+                  ng-click="customer.paymentOnline = method.id"
+                >
+                  {{method.label}}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="foodNotes" class="form-label">
+              Notes
+              <span class="label-hint">(optional)</span>
+            </label>
+            <textarea
+              id="foodNotes"
+              class="form-input form-textarea"
+              rows="3"
+              placeholder="Any special requests? e.g. less spicy, no onions..."
+              ng-model="customer.notes"
+            ></textarea>
+          </div>
+        </form>
+
+        <!-- Final Order Summary -->
+        <aside class="food-card food-summary food-checkout-summary">
+          <h3 class="food-summary-title">Final order summary</h3>
+
+          <ul class="order-items-list food-checkout-items">
+            <li ng-repeat="line in lines">
+              <span>
+                {{line.item.emoji}} {{line.item.name}} <strong>&times; {{line.qty}}</strong>
+                <em class="food-line-spec" ng-if="line.spec.length">{{line.spec.join(' &middot; ')}}</em>
+              </span>
+              <span>&#8377;{{line.lineTotal}}</span>
+            </li>
+          </ul>
+
+          <div class="food-summary-row"><span>Subtotal</span><span>&#8377;{{summary.subtotal}}</span></div>
+          <div class="food-summary-row"><span>{{summary.taxLabel}}</span><span>&#8377;{{summary.tax}}</span></div>
+          <div class="food-summary-row food-summary-total"><span>Total</span><span>&#8377;{{summary.total}}</span></div>
+
+          <button
+            type="button"
+            class="food-btn-primary"
+            ng-click="placeOrder()"
+            ng-disabled="isPlacing"
+          >
+            <span class="btn-spinner" ng-show="isPlacing">
+              <span class="spinner"></span>
+              Placing order...
+            </span>
+            <span ng-hide="isPlacing">Place Order &middot; &#8377;{{summary.total}}</span>
+          </button>
+
+          <p class="food-safe-note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            You will receive a confirmation with a unique order number right away.
+          </p>
+        </aside>
+      </div>
+    </div>
+  </script>
+
   <!-- AngularJS Core and ngRoute -->
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular-route.min.js"></script>
@@ -1020,13 +1758,18 @@
   <script src="js/services/AuthService.js"></script>
   <script src="js/services/QueueService.js"></script>
   <script src="js/services/UserService.js"></script>
+  <script src="js/services/OrderService.js"></script>
+  <script src="js/services/FoodOrderService.js"></script>
 
   <!-- Controllers -->
   <script src="js/controllers/LoginController.js"></script>
   <script src="js/controllers/HomeController.js"></script>
   <script src="js/controllers/CanteenQueueController.js"></script>
   <script src="js/controllers/PhotostatQueueController.js"></script>
-  <script src="js/controllers/ProfileController.js"></script>
+  <script src="js/controllers/OrderController.js"></script>
+  <script src="js/controllers/FoodController.js"></script>
+  <script src="js/controllers/FoodCartController.js"></script>
+  <script src="js/controllers/FoodCheckoutController.js"></script>
 
 </body>
 </html>
