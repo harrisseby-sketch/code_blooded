@@ -34,6 +34,10 @@
           templateUrl: 'templates/photostat-queue.html',
           controller: 'PhotostatQueueController'
         })
+        .when('/profile', {
+          templateUrl: 'templates/profile.html',
+          controller: 'ProfileController'
+        })
         .otherwise({
           redirectTo: '/home'
         });
@@ -47,16 +51,28 @@
     'AuthService',
     'QueueService',
     function ($rootScope, $location, AuthService, QueueService) {
-      // Expose services to root scope for layout components (navbar, toast)
+      // Expose services to root scope for layout components (navbar, toast, banner)
       $rootScope.auth = AuthService;
       $rootScope.toast = QueueService.toastState;
 
+      // Global "You're next" notification state (rendered app-wide in index.html)
+      $rootScope.nextNotification = QueueService.nextNotification;
+
       /**
-       * Global Logout action accessible from top navbar
+       * Global Logout action accessible from top navbar.
+       * Also resets the in-memory demo data so the next login starts clean.
        */
       $rootScope.globalLogout = function () {
         AuthService.logout();
+        QueueService.resetDemoData();
         $location.path('/login');
+      };
+
+      /**
+       * Global navigation to the Profile / User Details page (navbar link)
+       */
+      $rootScope.goToProfile = function () {
+        $location.path('/profile');
       };
 
       /**
@@ -64,6 +80,20 @@
        */
       $rootScope.dismissToast = function () {
         QueueService.hideToast();
+      };
+
+      /**
+       * Global "You're next" banner dismissal
+       */
+      $rootScope.dismissNextNotification = function () {
+        QueueService.dismissNextNotification();
+      };
+
+      /**
+       * Global sound toggle for the "You're next" banner (muted by default)
+       */
+      $rootScope.toggleNextSound = function () {
+        return QueueService.toggleNextSound();
       };
 
       // --- Route Authorization Guard ---

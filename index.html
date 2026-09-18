@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QueueSync - Campus Queue Tracker</title>
-  
+
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  
+
   <!-- CSS Stylesheets -->
   <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -30,6 +30,14 @@
 
       <!-- Navbar Actions (Active when logged in) -->
       <div class="navbar-actions" ng-show="auth.isLoggedIn()">
+        <button type="button" class="btn-profile" ng-click="goToProfile()" title="My account / Recent queues">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>Profile</span>
+        </button>
+
         <div class="student-badge" title="Active Student Session">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -55,9 +63,37 @@
     <div ng-view></div>
   </main>
 
+  <!-- Global "You're next" Notification Banner -->
+  <aside class="next-banner-wrap" aria-live="assertive" ng-show="nextNotification.visible" ng-click="dismissNextNotification()">
+    <div class="next-banner" ng-class="'next-' + nextNotification.kind">
+      <div class="next-banner-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+      </div>
+      <div class="next-banner-text">
+        <strong>{{nextNotification.message}}</strong>
+        <span>Please make your way to the counter.</span>
+      </div>
+      <button
+        type="button"
+        class="next-banner-sound"
+        ng-click="$event.stopPropagation(); toggleNextSound();"
+        ng-class="{'sound-on': nextNotification.soundEnabled}"
+        title="Toggle alert sound">
+        <span ng-if="!nextNotification.soundEnabled">Sound off</span>
+        <span ng-if="nextNotification.soundEnabled">Sound on</span>
+      </button>
+      <button type="button" class="next-banner-close" ng-click="$event.stopPropagation(); dismissNextNotification()" aria-label="Dismiss notification">
+        &times;
+      </button>
+    </div>
+  </aside>
+
   <!-- Global Toast Notification Banner -->
   <aside class="toast-container" aria-live="polite" ng-show="toast.visible">
-    <div class="toast" ng-class="{'toast-success': toast.type === 'success', 'toast-info': toast.type === 'info'}">
+    <div class="toast" ng-class="{'toast-success': toast.type === 'success', 'toast-info': toast.type === 'info', 'toast-warning': toast.type === 'warning'}">
       <div class="toast-message">
         <svg ng-if="toast.type === 'success'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"></polyline>
@@ -66,6 +102,11 @@
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="16" x2="12" y2="12"></line>
           <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <svg ng-if="toast.type === 'warning'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
         <span>{{toast.message}}</span>
       </div>
@@ -176,7 +217,7 @@
         </div>
         <h1 class="hero-title">Select a Queue</h1>
         <p class="hero-subtitle">
-          Check live waiting times, reserve your spot, and beat the campus rush without standing in line.
+          Check live waiting times, busyness and the best time to visit - then reserve your spot without standing in line.
         </p>
       </header>
 
@@ -186,7 +227,7 @@
         <!-- Canteen Card -->
         <div class="queue-card canteen-card" ng-click="goToQueue('canteen')" role="button" tabindex="0" aria-label="Canteen Queue">
           <div class="card-pattern card-pattern-canteen"></div>
-          
+
           <div class="card-header">
             <div class="card-icon-wrapper canteen-icon-wrapper">
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -204,12 +245,37 @@
             <h2 class="card-title">{{queues.canteen.title}}</h2>
             <p class="card-description">{{queues.canteen.description}}</p>
 
+            <!-- Busyness + Live Status Row -->
+            <div class="card-status-row">
+              <span class="busyness-badge" ng-class="queueInfo.canteen.busyness.colorClass">
+                <span class="busyness-dot" ng-class="queueInfo.canteen.busyness.dotClass"></span>
+                {{queueInfo.canteen.busyness.level}}
+              </span>
+              <span class="card-sep">•</span>
+              <span class="live-status-chip" ng-class="queueInfo.canteen.liveStatus.colorClass">
+                <svg ng-if="queueInfo.canteen.liveStatus.icon === 'rocket'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <svg ng-if="queueInfo.canteen.liveStatus.icon === 'clock'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <svg ng-if="queueInfo.canteen.liveStatus.icon === 'slow'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 22h14"></path>
+                  <path d="M5 2h14"></path>
+                  <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
+                  <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
+                </svg>
+                {{queueInfo.canteen.liveStatus.label}}
+              </span>
+            </div>
+
             <!-- Live Queue Metrics -->
             <div class="metrics-container">
               <div class="metric-item">
                 <span class="metric-label">People in queue</span>
                 <div class="metric-value-wrap">
-                  <span class="metric-value">{{queues.canteen.count}}</span>
+                  <span class="metric-value">{{queueInfo.canteen.peopleCount}}</span>
                   <span class="metric-unit">students</span>
                 </div>
               </div>
@@ -219,10 +285,18 @@
               <div class="metric-item">
                 <span class="metric-label">Estimated wait</span>
                 <div class="metric-value-wrap">
-                  <span class="metric-value">~{{queues.canteen.waitTime}}</span>
+                  <span class="metric-value">~{{queueInfo.canteen.estimatedWaitTime}}</span>
                   <span class="metric-unit">mins</span>
                 </div>
               </div>
+            </div>
+
+            <!-- Best-Time Recommendation Strip -->
+            <div class="besttime-line">
+              <span class="besttime-advice" ng-class="queueInfo.canteen.currentAdvice.colorClass">
+                {{queueInfo.canteen.currentAdvice.text}}
+              </span>
+              <span class="besttime-windows">Best time: {{queueInfo.canteen.bestTimeText}}</span>
             </div>
 
             <!-- Personal Queue Status Pill -->
@@ -247,7 +321,7 @@
         <!-- Photostat Shop Card -->
         <div class="queue-card photostat-card" ng-click="goToQueue('photostat')" role="button" tabindex="0" aria-label="Photostat Shop Queue">
           <div class="card-pattern card-pattern-photostat"></div>
-          
+
           <div class="card-header">
             <div class="card-icon-wrapper photostat-icon-wrapper">
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -263,12 +337,37 @@
             <h2 class="card-title">{{queues.photostat.title}}</h2>
             <p class="card-description">{{queues.photostat.description}}</p>
 
+            <!-- Busyness + Live Status Row -->
+            <div class="card-status-row">
+              <span class="busyness-badge" ng-class="queueInfo.photostat.busyness.colorClass">
+                <span class="busyness-dot" ng-class="queueInfo.photostat.busyness.dotClass"></span>
+                {{queueInfo.photostat.busyness.level}}
+              </span>
+              <span class="card-sep">•</span>
+              <span class="live-status-chip" ng-class="queueInfo.photostat.liveStatus.colorClass">
+                <svg ng-if="queueInfo.photostat.liveStatus.icon === 'rocket'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <svg ng-if="queueInfo.photostat.liveStatus.icon === 'clock'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <svg ng-if="queueInfo.photostat.liveStatus.icon === 'slow'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 22h14"></path>
+                  <path d="M5 2h14"></path>
+                  <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
+                  <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
+                </svg>
+                {{queueInfo.photostat.liveStatus.label}}
+              </span>
+            </div>
+
             <!-- Live Queue Metrics -->
             <div class="metrics-container">
               <div class="metric-item">
                 <span class="metric-label">People in queue</span>
                 <div class="metric-value-wrap">
-                  <span class="metric-value">{{queues.photostat.count}}</span>
+                  <span class="metric-value">{{queueInfo.photostat.peopleCount}}</span>
                   <span class="metric-unit">students</span>
                 </div>
               </div>
@@ -278,10 +377,18 @@
               <div class="metric-item">
                 <span class="metric-label">Estimated wait</span>
                 <div class="metric-value-wrap">
-                  <span class="metric-value">~{{queues.photostat.waitTime}}</span>
+                  <span class="metric-value">~{{queueInfo.photostat.estimatedWaitTime}}</span>
                   <span class="metric-unit">mins</span>
                 </div>
               </div>
+            </div>
+
+            <!-- Best-Time Recommendation Strip -->
+            <div class="besttime-line">
+              <span class="besttime-advice" ng-class="queueInfo.photostat.currentAdvice.colorClass">
+                {{queueInfo.photostat.currentAdvice.text}}
+              </span>
+              <span class="besttime-windows">Best time: {{queueInfo.photostat.bestTimeText}}</span>
             </div>
 
             <!-- Personal Queue Status Pill -->
@@ -309,7 +416,7 @@
       <div class="home-info-bar">
         <div class="info-icon">💡</div>
         <div class="info-text">
-          <strong>Pro Tip:</strong> Join a queue before leaving class. QueueSync calculates estimated arrival so you reach right on time!
+          <strong>Pro Tip:</strong> Join a queue before leaving class. QueueSync predicts your wait and pings you when you're next!
         </div>
       </div>
     </div>
@@ -328,15 +435,25 @@
           <span>Back to queues</span>
         </button>
 
-        <div class="live-pill">
-          <span class="pulse-dot active"></span>
-          <span>Live Sync Active</span>
+        <div class="detail-nav-actions">
+          <!-- Demo simulation speed toggle (1x / 30x / 120x) -->
+          <button type="button" class="sim-toggle" ng-click="cycleSimSpeed()" title="Demo simulation speed: 1x = real-time minutes">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            {{simSpeed}}x demo
+          </button>
+
+          <div class="live-pill">
+            <span class="pulse-dot active"></span>
+            <span>Live Sync Active</span>
+          </div>
         </div>
       </nav>
 
       <!-- Main Detail Card -->
       <div class="detail-card">
-        
+
         <!-- Detail Header -->
         <header class="detail-header">
           <div class="header-content">
@@ -356,11 +473,35 @@
               </div>
             </div>
           </div>
+
+          <!-- Busyness + Aggregated Live Status (prominent) -->
+          <div class="detail-status-row">
+            <span class="busyness-badge lg" ng-class="queueInfo.busyness.colorClass">
+              <span class="busyness-dot" ng-class="queueInfo.busyness.dotClass"></span>
+              {{queueInfo.busyness.level}} traffic
+            </span>
+            <span class="live-status-chip lg" ng-class="queueInfo.liveStatus.colorClass">
+              <svg ng-if="queueInfo.liveStatus.icon === 'rocket'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <svg ng-if="queueInfo.liveStatus.icon === 'clock'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <svg ng-if="queueInfo.liveStatus.icon === 'slow'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 22h14"></path>
+                <path d="M5 2h14"></path>
+                <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
+                <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
+              </svg>
+              Live status: {{queueInfo.liveStatus.label}}
+            </span>
+          </div>
         </header>
 
         <!-- Live Stats Grid Display -->
         <div class="stats-display-grid">
-          
+
           <!-- Live Count Card -->
           <div class="stat-card">
             <div class="stat-meta">
@@ -368,11 +509,11 @@
               <span class="stat-sublabel">Current queue length</span>
             </div>
             <div class="stat-big-number">
-              <span class="counter-number">{{queue.count}}</span>
+              <span class="counter-number">{{queueInfo.peopleCount}}</span>
             </div>
             <div class="stat-footer-text">
-              <span ng-if="queue.count === 0">No line right now!</span>
-              <span ng-if="queue.count > 0">{{queue.count}} students ahead</span>
+              <span ng-if="queueInfo.peopleCount === 0">No line right now!</span>
+              <span ng-if="queueInfo.peopleCount > 0">{{queueInfo.peopleCount}} students ahead</span>
             </div>
           </div>
 
@@ -380,19 +521,27 @@
           <div class="stat-card">
             <div class="stat-meta">
               <span class="stat-label">Estimated wait</span>
-              <span class="stat-sublabel">Avg ~45s / student</span>
+              <span class="stat-sublabel">~{{queueInfo.timePerPerson}} min / student</span>
             </div>
             <div class="stat-big-number">
-              <span class="counter-number">~{{queue.waitTime}}</span>
+              <span class="counter-number">~{{queueInfo.estimatedWaitTime}}</span>
               <span class="counter-unit">mins</span>
             </div>
             <div class="stat-footer-text">
-              <span ng-if="queue.waitTime === 0">Instant service</span>
-              <span ng-if="queue.waitTime > 0 && queue.waitTime <= 5">Fast moving line</span>
-              <span ng-if="queue.waitTime > 5">Moderate campus rush</span>
+              <span ng-if="queueInfo.estimatedWaitTime === 0">Instant service</span>
+              <span ng-if="queueInfo.estimatedWaitTime > 0 && queueInfo.estimatedWaitTime <= 5">Fast moving line</span>
+              <span ng-if="queueInfo.estimatedWaitTime > 5">Moderate campus rush</span>
             </div>
           </div>
 
+        </div>
+
+        <!-- Best-Time Recommendation Strip -->
+        <div class="besttime-strip">
+          <span class="besttime-advice" ng-class="queueInfo.currentAdvice.colorClass">
+            {{queueInfo.currentAdvice.text}}
+          </span>
+          <span class="besttime-windows">Best time to visit: {{queueInfo.bestTimeText}}</span>
         </div>
 
         <!-- Personal Queue Membership Banner -->
@@ -406,7 +555,7 @@
               You are currently in this queue!
             </div>
             <div class="banner-desc" ng-if="userStatus.joined">
-              Your estimated spot is <strong>#{{userStatus.position}}</strong>. Please proceed to the canteen counter when your turn approaches.
+              Your spot is <strong>#{{userStatus.position}}</strong> with {{userStatus.peopleAhead}} people ahead. Please proceed to the canteen counter when your turn approaches.
             </div>
             <div class="banner-title" ng-if="!userStatus.joined">
               You are not currently in this queue
@@ -415,6 +564,48 @@
               Tap <strong>Join queue</strong> below to secure your spot without standing in line.
             </div>
           </div>
+        </div>
+
+        <!-- Dynamic Position Panel (visible only while joined) -->
+        <div class="position-panel" ng-if="userStatus.joined" ng-class="{'position-serving': userStatus.position === 1}">
+          <div class="position-main">
+            <div class="position-number">
+              <span class="position-caption">Your position</span>
+              <span class="position-value">#{{userStatus.position}}</span>
+            </div>
+            <div class="position-details">
+              <div class="pos-row">
+                <span>People ahead of you</span>
+                <strong>{{userStatus.peopleAhead}}</strong>
+              </div>
+              <div class="pos-row">
+                <span>Estimated time until your turn</span>
+                <strong>~{{userStatus.minutesUntilTurn}} mins</strong>
+              </div>
+            </div>
+          </div>
+          <div class="served-note" ng-if="userStatus.position === 1">
+            <span class="pulse-dot active"></span>
+            You are being served now
+          </div>
+        </div>
+
+        <!-- Live Status Reporting (only while joined) -->
+        <div class="live-status-report" ng-if="userStatus.joined">
+          <div class="report-title">How is the Canteen queue moving right now?</div>
+          <div class="report-options">
+            <button
+              type="button"
+              class="report-btn"
+              ng-repeat="opt in liveStatusOptions"
+              ng-class="{'report-fast': opt.value === 'fast', 'report-normal': opt.value === 'normal', 'report-slow': opt.value === 'slow', 'active': myStatus === opt.value}"
+              ng-click="setLiveStatus(opt.value)"
+            >
+              <span class="report-dot" ng-class="{'dot-fast': opt.value === 'fast', 'dot-normal': opt.value === 'normal', 'dot-slow': opt.value === 'slow'}"></span>
+              {{opt.label}}
+            </button>
+          </div>
+          <p class="report-note" ng-if="myStatus">You reported: <strong>{{myStatus}}</strong> - thanks for keeping it live!</p>
         </div>
 
         <!-- Action Buttons -->
@@ -446,8 +637,8 @@
             type="button"
             class="btn-action btn-leave"
             ng-click="leaveQueue()"
-            ng-disabled="isUpdating || !userStatus.joined || queue.count === 0"
-            ng-class="{'btn-disabled': isUpdating || !userStatus.joined || queue.count === 0}"
+            ng-disabled="isUpdating || !userStatus.joined || queueInfo.peopleCount === 0"
+            ng-class="{'btn-disabled': isUpdating || !userStatus.joined || queueInfo.peopleCount === 0}"
           >
             <span class="btn-content" ng-hide="isUpdating">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -463,7 +654,7 @@
         <!-- Real-Time Sync Notice -->
         <footer class="detail-footer-note">
           <div class="pulse-ring"></div>
-          <p>Updates are live and visible to all users &bull; Syncing real-time campus data</p>
+          <p>Updates are live and visible to all users &bull; Simulating real-time campus data (Firebase-ready)</p>
         </footer>
 
       </div>
@@ -483,15 +674,25 @@
           <span>Back to queues</span>
         </button>
 
-        <div class="live-pill">
-          <span class="pulse-dot active"></span>
-          <span>Live Sync Active</span>
+        <div class="detail-nav-actions">
+          <!-- Demo simulation speed toggle (1x / 30x / 120x) -->
+          <button type="button" class="sim-toggle" ng-click="cycleSimSpeed()" title="Demo simulation speed: 1x = real-time minutes">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            {{simSpeed}}x demo
+          </button>
+
+          <div class="live-pill">
+            <span class="pulse-dot active"></span>
+            <span>Live Sync Active</span>
+          </div>
         </div>
       </nav>
 
       <!-- Main Detail Card -->
       <div class="detail-card">
-        
+
         <!-- Detail Header -->
         <header class="detail-header">
           <div class="header-content">
@@ -509,11 +710,35 @@
               </div>
             </div>
           </div>
+
+          <!-- Busyness + Aggregated Live Status (prominent) -->
+          <div class="detail-status-row">
+            <span class="busyness-badge lg" ng-class="queueInfo.busyness.colorClass">
+              <span class="busyness-dot" ng-class="queueInfo.busyness.dotClass"></span>
+              {{queueInfo.busyness.level}} traffic
+            </span>
+            <span class="live-status-chip lg" ng-class="queueInfo.liveStatus.colorClass">
+              <svg ng-if="queueInfo.liveStatus.icon === 'rocket'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <svg ng-if="queueInfo.liveStatus.icon === 'clock'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <svg ng-if="queueInfo.liveStatus.icon === 'slow'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 22h14"></path>
+                <path d="M5 2h14"></path>
+                <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
+                <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
+              </svg>
+              Live status: {{queueInfo.liveStatus.label}}
+            </span>
+          </div>
         </header>
 
         <!-- Live Stats Grid Display -->
         <div class="stats-display-grid">
-          
+
           <!-- Live Count Card -->
           <div class="stat-card">
             <div class="stat-meta">
@@ -521,11 +746,11 @@
               <span class="stat-sublabel">Current queue length</span>
             </div>
             <div class="stat-big-number">
-              <span class="counter-number">{{queue.count}}</span>
+              <span class="counter-number">{{queueInfo.peopleCount}}</span>
             </div>
             <div class="stat-footer-text">
-              <span ng-if="queue.count === 0">No line right now!</span>
-              <span ng-if="queue.count > 0">{{queue.count}} students ahead</span>
+              <span ng-if="queueInfo.peopleCount === 0">No line right now!</span>
+              <span ng-if="queueInfo.peopleCount > 0">{{queueInfo.peopleCount}} students ahead</span>
             </div>
           </div>
 
@@ -533,19 +758,27 @@
           <div class="stat-card">
             <div class="stat-meta">
               <span class="stat-label">Estimated wait</span>
-              <span class="stat-sublabel">Avg ~1.5 mins / student</span>
+              <span class="stat-sublabel">~{{queueInfo.timePerPerson}} min / student</span>
             </div>
             <div class="stat-big-number">
-              <span class="counter-number">~{{queue.waitTime}}</span>
+              <span class="counter-number">~{{queueInfo.estimatedWaitTime}}</span>
               <span class="counter-unit">mins</span>
             </div>
             <div class="stat-footer-text">
-              <span ng-if="queue.waitTime === 0">Instant service</span>
-              <span ng-if="queue.waitTime > 0 && queue.waitTime <= 6">Quick turn-around</span>
-              <span ng-if="queue.waitTime > 6">Printing rush in progress</span>
+              <span ng-if="queueInfo.estimatedWaitTime === 0">Instant service</span>
+              <span ng-if="queueInfo.estimatedWaitTime > 0 && queueInfo.estimatedWaitTime <= 6">Quick turn-around</span>
+              <span ng-if="queueInfo.estimatedWaitTime > 6">Printing rush in progress</span>
             </div>
           </div>
 
+        </div>
+
+        <!-- Best-Time Recommendation Strip -->
+        <div class="besttime-strip">
+          <span class="besttime-advice" ng-class="queueInfo.currentAdvice.colorClass">
+            {{queueInfo.currentAdvice.text}}
+          </span>
+          <span class="besttime-windows">Best time to visit: {{queueInfo.bestTimeText}}</span>
         </div>
 
         <!-- Personal Queue Membership Banner -->
@@ -559,7 +792,7 @@
               You are currently in this queue!
             </div>
             <div class="banner-desc" ng-if="userStatus.joined">
-              Your estimated spot is <strong>#{{userStatus.position}}</strong>. Have your documents ready when your number is reached.
+              Your spot is <strong>#{{userStatus.position}}</strong> with {{userStatus.peopleAhead}} people ahead. Have your documents ready when your number is reached.
             </div>
             <div class="banner-title" ng-if="!userStatus.joined">
               You are not currently in this queue
@@ -568,6 +801,48 @@
               Tap <strong>Join queue</strong> below to secure your spot for printing or photocopying.
             </div>
           </div>
+        </div>
+
+        <!-- Dynamic Position Panel (visible only while joined) -->
+        <div class="position-panel" ng-if="userStatus.joined" ng-class="{'position-serving': userStatus.position === 1}">
+          <div class="position-main">
+            <div class="position-number">
+              <span class="position-caption">Your position</span>
+              <span class="position-value">#{{userStatus.position}}</span>
+            </div>
+            <div class="position-details">
+              <div class="pos-row">
+                <span>People ahead of you</span>
+                <strong>{{userStatus.peopleAhead}}</strong>
+              </div>
+              <div class="pos-row">
+                <span>Estimated time until your turn</span>
+                <strong>~{{userStatus.minutesUntilTurn}} mins</strong>
+              </div>
+            </div>
+          </div>
+          <div class="served-note" ng-if="userStatus.position === 1">
+            <span class="pulse-dot active"></span>
+            You are being served now
+          </div>
+        </div>
+
+        <!-- Live Status Reporting (only while joined) -->
+        <div class="live-status-report" ng-if="userStatus.joined">
+          <div class="report-title">How is the Photostat queue moving right now?</div>
+          <div class="report-options">
+            <button
+              type="button"
+              class="report-btn"
+              ng-repeat="opt in liveStatusOptions"
+              ng-class="{'report-fast': opt.value === 'fast', 'report-normal': opt.value === 'normal', 'report-slow': opt.value === 'slow', 'active': myStatus === opt.value}"
+              ng-click="setLiveStatus(opt.value)"
+            >
+              <span class="report-dot" ng-class="{'dot-fast': opt.value === 'fast', 'dot-normal': opt.value === 'normal', 'dot-slow': opt.value === 'slow'}"></span>
+              {{opt.label}}
+            </button>
+          </div>
+          <p class="report-note" ng-if="myStatus">You reported: <strong>{{myStatus}}</strong> - thanks for keeping it live!</p>
         </div>
 
         <!-- Action Buttons -->
@@ -599,8 +874,8 @@
             type="button"
             class="btn-action btn-leave"
             ng-click="leaveQueue()"
-            ng-disabled="isUpdating || !userStatus.joined || queue.count === 0"
-            ng-class="{'btn-disabled': isUpdating || !userStatus.joined || queue.count === 0}"
+            ng-disabled="isUpdating || !userStatus.joined || queueInfo.peopleCount === 0"
+            ng-class="{'btn-disabled': isUpdating || !userStatus.joined || queueInfo.peopleCount === 0}"
           >
             <span class="btn-content" ng-hide="isUpdating">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -616,9 +891,120 @@
         <!-- Real-Time Sync Notice -->
         <footer class="detail-footer-note">
           <div class="pulse-ring"></div>
-          <p>Updates are live and visible to all users &bull; Syncing real-time campus data</p>
+          <p>Updates are live and visible to all users &bull; Simulating real-time campus data (Firebase-ready)</p>
         </footer>
 
+      </div>
+    </div>
+  </script>
+
+  <!-- Profile / User Details Template -->
+  <script type="text/ng-template" id="templates/profile.html">
+    <div class="page-container profile-view">
+      <!-- Back Button & Breadcrumb Navigation -->
+      <nav class="detail-nav">
+        <button type="button" class="btn-back" ng-click="goHome()" aria-label="Back to queues">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>Back to queues</span>
+        </button>
+
+        <div class="live-pill">
+          <span class="pulse-dot active"></span>
+          <span>My Account</span>
+        </div>
+      </nav>
+
+      <!-- Profile Card -->
+      <div class="profile-card">
+        <!-- Profile Header -->
+        <header class="profile-header">
+          <div class="profile-avatar">{{initials}}</div>
+          <div class="profile-heading">
+            <h1 class="profile-title">Student Profile</h1>
+            <p class="student-id-line">
+              Student ID:
+              <strong>{{studentId}}</strong>
+              <span class="id-verified">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                verified
+              </span>
+            </p>
+          </div>
+        </header>
+
+        <!-- Recent Queues Section -->
+        <section class="profile-section">
+          <div class="section-heading">
+            <h2>Recent Queues</h2>
+            <span class="section-subtitle">Your latest visits &amp; wait experiences</span>
+          </div>
+
+          <!-- Empty State -->
+          <div class="empty-history" ng-if="!hasHistory()">
+            <div class="empty-illustration">
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </div>
+            <p class="empty-title">No queue history yet</p>
+            <p class="empty-desc">Join a queue and either get served or leave early to see your visit here.</p>
+          </div>
+
+          <!-- History List -->
+          <ul class="history-list" ng-if="hasHistory()">
+            <li class="history-item" ng-repeat="entry in visibleHistory() track by $index">
+              <div class="history-icon" ng-class="'history-icon-' + entry.locationId">
+                <svg ng-if="entry.locationId === 'canteen'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                  <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                  <line x1="6" y1="1" x2="6" y2="4"></line>
+                  <line x1="10" y1="1" x2="10" y2="4"></line>
+                  <line x1="14" y1="1" x2="14" y2="4"></line>
+                </svg>
+                <svg ng-if="entry.locationId === 'photostat'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+              </div>
+
+              <div class="history-info">
+                <span class="history-title">{{locationLabel(entry)}}</span>
+                <span class="history-meta">{{formatDateTime(entry.joinedAt)}}</span>
+              </div>
+
+              <div class="history-wait">
+                <span class="wait-label">Wait</span>
+                <span class="wait-value">~{{entry.waitTimeMinutes}} min</span>
+              </div>
+
+              <span class="status-badge" ng-class="{'badge-completed': entry.status === 'Completed', 'badge-left': entry.status === 'Left early'}">
+                {{entry.status}}
+              </span>
+            </li>
+          </ul>
+
+          <!-- Show more / less -->
+          <button
+            type="button"
+            class="btn-show-more"
+            ng-if="hasHistory() && history.length > DEFAULT_VISIBLE"
+            ng-click="toggleShowAll()"
+          >
+            {{showAll ? 'Show less' : 'Show all visits (' + history.length + ')'}}
+          </button>
+
+          <p class="storage-note">
+            History is stored locally for this demo session.
+            <em>(Todo: sync to Firebase at users/{{studentId}}/history)</em>
+          </p>
+        </section>
       </div>
     </div>
   </script>
@@ -633,12 +1019,14 @@
   <!-- Services -->
   <script src="js/services/AuthService.js"></script>
   <script src="js/services/QueueService.js"></script>
+  <script src="js/services/UserService.js"></script>
 
   <!-- Controllers -->
   <script src="js/controllers/LoginController.js"></script>
   <script src="js/controllers/HomeController.js"></script>
   <script src="js/controllers/CanteenQueueController.js"></script>
   <script src="js/controllers/PhotostatQueueController.js"></script>
+  <script src="js/controllers/ProfileController.js"></script>
 
 </body>
 </html>
