@@ -1,84 +1,164 @@
-<div class="login-wrapper">
-  <!-- Decorative background shapes -->
-  <div class="bg-shape bg-shape-1"></div>
-  <div class="bg-shape bg-shape-2"></div>
+    <div class="login-view-wrapper">
+      <div class="login-wrapper">
+        <div class="login-card">
+          <!-- Branding -->
+          <div class="brand">
+            <div class="brand-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </div>
+            <h1 class="brand-name">QueueSync</h1>
+            <p class="brand-tagline">Real-time campus queue tracker</p>
+          </div>
 
-  <div class="login-card">
-    <!-- Branding -->
-    <div class="brand">
-      <div class="brand-icon">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-          <circle cx="9" cy="7" r="4"></circle>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-        </svg>
-      </div>
-      <h1 class="brand-name">QueueSync</h1>
-      <p class="brand-tagline">Real-time campus queue tracker</p>
-    </div>
+          <!-- Role Switch: Student / Admin -->
+          <div class="login-role-switch" role="tablist" aria-label="Login type">
+            <button
+              type="button"
+              class="login-role-tab"
+              ng-class="{'active': role === 'student'}"
+              ng-click="switchRole('student')"
+              role="tab"
+              aria-selected="role === 'student'"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              <span>Student</span>
+            </button>
+            <button
+              type="button"
+              class="login-role-tab"
+              ng-class="{'active': role === 'admin'}"
+              ng-click="switchRole('admin')"
+              role="tab"
+              aria-selected="role === 'admin'"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-3 8-10V5l-8-3-8 3v7c0 7 8 10 8 10z"></path>
+                <path d="M9 12l2 2 4-4"></path>
+              </svg>
+              <span>Admin</span>
+            </button>
+          </div>
 
-    <!-- Login form -->
-    <form name="loginForm" ng-submit="handleLogin()" novalidate>
-      <div class="form-group">
-        <label for="studentId" class="form-label">
-          Student ID
-          <span class="label-hint">(5 digits ending in 23, 24, 25, 26)</span>
-        </label>
-        
-        <div class="input-with-icon">
-          <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-            <circle cx="9" cy="10" r="2"></circle>
-            <line x1="15" y1="8" x2="17" y2="8"></line>
-            <line x1="15" y1="12" x2="17" y2="12"></line>
-            <line x1="7" y1="16" x2="17" y2="16"></line>
-          </svg>
-          <input
-            type="tel"
-            inputmode="numeric"
-            pattern="[0-9]*"
-            maxlength="5"
-            id="studentId"
-            name="studentId"
-            class="form-input"
-            placeholder="e.g. 12326 or 54325"
-            ng-model="studentId"
-            ng-disabled="isSubmitting"
-            ng-class="{'input-error': errorMessage}"
-            autocomplete="off"
-            autofocus
-            required
-          >
+          <!-- Student Login Form -->
+          <form name="loginForm" ng-submit="handleLogin()" ng-show="role === 'student'" novalidate>
+            <div class="form-group">
+              <label for="studentId" class="form-label">
+                Student ID
+                <span class="label-hint">(5 digits ending in 23, 24, 25, 26)</span>
+              </label>
+
+              <div class="input-with-icon">
+                <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                  <circle cx="9" cy="10" r="2"></circle>
+                  <line x1="15" y1="8" x2="17" y2="8"></line>
+                  <line x1="15" y1="12" x2="17" y2="12"></line>
+                  <line x1="7" y1="16" x2="17" y2="16"></line>
+                </svg>
+                <input
+                  type="tel"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  maxlength="5"
+                  id="studentId"
+                  name="studentId"
+                  class="form-input"
+                  placeholder="e.g. 12326 or 54325"
+                  ng-model="studentId"
+                  ng-disabled="isSubmitting"
+                  ng-class="{'input-error': errorMessage}"
+                  autocomplete="off"
+                  autofocus
+                  required
+                >
+              </div>
+
+              <span class="error-message" ng-show="errorMessage" role="alert">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px; flex-shrink: 0;">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {{errorMessage}}
+              </span>
+            </div>
+
+            <button
+              type="submit"
+              class="btn-submit"
+              ng-disabled="isSubmitting || !studentId"
+              ng-class="{'btn-disabled': isSubmitting || !studentId}"
+            >
+              <span class="btn-text" ng-hide="isSubmitting">Enter QueueSync</span>
+              <span class="btn-spinner" ng-show="isSubmitting">
+                <span class="spinner"></span>
+                Signing in...
+              </span>
+            </button>
+          </form>
+
+          <!-- Admin Login Form -->
+          <form name="adminForm" ng-submit="handleAdminLogin()" ng-show="role === 'admin'" novalidate>
+            <div class="form-group">
+              <label for="adminCode" class="form-label">
+                Admin access code
+                <span class="label-hint">(special staff code)</span>
+              </label>
+
+              <div class="input-with-icon">
+                <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <input
+                  type="password"
+                  id="adminCode"
+                  name="adminCode"
+                  class="form-input"
+                  placeholder="ADMIN@2026"
+                  ng-model="adminCode"
+                  ng-disabled="isSubmitting"
+                  ng-class="{'input-error': errorMessage}"
+                  autocomplete="off"
+                  required
+                >
+              </div>
+
+              <span class="error-message" ng-show="errorMessage" role="alert">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px; flex-shrink: 0;">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {{errorMessage}}
+              </span>
+            </div>
+
+            <button
+              type="submit"
+              class="btn-submit admin-btn-submit"
+              ng-disabled="isSubmitting || !adminCode"
+              ng-class="{'btn-disabled': isSubmitting || !adminCode}"
+            >
+              <span class="btn-text" ng-hide="isSubmitting">Login as Admin</span>
+              <span class="btn-spinner" ng-show="isSubmitting">
+                <span class="spinner"></span>
+                Verifying...
+              </span>
+            </button>
+
+            <p class="admin-demo-hint">Demo access code <strong>ADMIN@2026</strong> is pre-filled &mdash; just tap <strong>Login as Admin</strong>.</p>
+          </form>
         </div>
-
-        <span class="error-message" ng-show="errorMessage" role="alert">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
-          {{errorMessage}}
-        </span>
       </div>
-
-      <button
-        type="submit"
-        class="btn-submit"
-        ng-disabled="isSubmitting || !studentId"
-        ng-class="{'btn-disabled': isSubmitting || !studentId}"
-      >
-        <span class="btn-text" ng-hide="isSubmitting">Enter QueueSync</span>
-        <span class="btn-spinner" ng-show="isSubmitting">
-          <span class="spinner"></span>
-          Signing in...
-        </span>
-      </button>
-    </form>
-
-    <!-- Hackathon Footer -->
-    <div class="card-footer">
-      <p>Built for <strong>Your College Name</strong> Hackathon 2025</p>
     </div>
-  </div>
-</div>

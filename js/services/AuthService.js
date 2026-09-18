@@ -1,6 +1,7 @@
 /* ============================================
    QueueSync - AuthService
-   Manages student authentication state & ID validation
+   Manages student authentication state & ID validation,
+   plus admin login via a special access code.
    ============================================ */
 
 (function () {
@@ -11,6 +12,11 @@
     function ($window) {
       var STORAGE_KEY = 'queueSync_studentId';
       var currentStudentId = null;
+
+      // --- Admin credentials ---
+      var ADMIN_STORAGE_KEY = 'queueSync_admin';
+      var ADMIN_CODE = 'ADMIN@2026';
+      var currentAdmin = false;
 
       // Initialize from sessionStorage if available
       try {
@@ -55,7 +61,8 @@
       }
 
       /**
-       * Logs in the student and stores ID in session
+       * Logs in the student and stores ID in session.
+       * An admin session is never active at the same time.
        */
       function login(studentId) {
         var cleanId = String(studentId).trim();
@@ -65,6 +72,8 @@
         } catch (e) {
           console.warn('Could not write to sessionStorage:', e);
         }
+        // Clear any admin session so the two roles stay fully separate.
+        adminLogout();
         return true;
       }
 
@@ -102,13 +111,79 @@
         return id !== null && isValidId(id);
       }
 
+      // ---- Admin session ----
+
+      /**
+       * Validates an admin access code (demo constant).
+       * @returns {boolean}
+       */
+      function validateAdminCode(code) {
+        return String(code || '').trim() === ADMIN_CODE;
+      }
+
+      /**
+       * Logs the admin in if the code is correct.
+       * A student session is never active at the same time.
+       * @returns {boolean} true on success
+       */
+      function adminLogin(code) {
+        if (!validateAdminCode(code)) {
+          return false;
+        }
+        // Clear any student session so the two roles stay fully separate.
+        currentStudentId = null;
+        try {
+          $window.sessionStorage.removeItem(STORAGE_KEY);
+        } catch (e) {
+          console.warn('Could not clear student session:', e);
+        }
+        currentAdmin = true;
+        try {
+          $window.sessionStorage.setItem(ADMIN_STORAGE_KEY, '1');
+        } catch (e) {
+          console.warn('Could not write admin session:', e);
+        }
+        return true;
+      }
+
+      /**
+       * Logs the admin out.
+       */
+      function adminLogout() {
+        currentAdmin = false;
+        try {
+          $window.sessionStorage.removeItem(ADMIN_STORAGE_KEY);
+        } catch (e) {
+          console.warn('Could not remove admin session:', e);
+        }
+      }
+
+      /**
+       * True while an admin session is active.
+       */
+      function isAdmin() {
+        if (currentAdmin) {
+          return true;
+        }
+        try {
+          currentAdmin = !!$window.sessionStorage.getItem(ADMIN_STORAGE_KEY);
+        } catch (e) {
+          currentAdmin = false;
+        }
+        return currentAdmin;
+      }
+
       return {
         validateStudentId: validateStudentId,
         isValidId: isValidId,
         login: login,
         logout: logout,
         getStudentId: getStudentId,
-        isLoggedIn: isLoggedIn
+        isLoggedIn: isLoggedIn,
+        validateAdminCode: validateAdminCode,
+        adminLogin: adminLogin,
+        adminLogout: adminLogout,
+        isAdmin: isAdmin
       };
     }
   ]);

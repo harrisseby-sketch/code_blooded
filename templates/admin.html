@@ -1,0 +1,199 @@
+    <div class="page-container admin-view">
+      <!-- Back Button & Breadcrumb Navigation -->
+      <nav class="detail-nav">
+        <div class="detail-nav-actions">
+          <div class="live-pill">
+            <span class="pulse-dot active"></span>
+            <span>Admin</span>
+          </div>
+          <button type="button" class="btn-logout" ng-click="logoutAdmin()" title="Log out of admin session">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>Logout</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Page Header -->
+      <header class="admin-head">
+        <div>
+          <h1 class="location-title">Admin Dashboard</h1>
+          <p class="admin-subtitle">Live store data &mdash; queues, food availability and orders.</p>
+        </div>
+        <button type="button" class="food-btn-ghost" ng-click="refresh()" ng-disabled="isLoading">
+          {{isLoading ? 'Refreshing...' : 'Refresh'}}
+        </button>
+      </header>
+
+      <p class="admin-last-refresh" ng-if="refreshedAt">Last refreshed at {{formatTime(refreshedAt)}} &middot; auto-updates every 10s</p>
+
+      <!-- Live Stats Grid -->
+      <div class="stats-display-grid">
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-label">Canteen queue</span>
+            <span class="stat-sublabel">Students waiting now</span>
+          </div>
+          <div class="stat-big-number">
+            <span class="counter-number">{{stats.canteenCount}}</span>
+          </div>
+          <div class="stat-footer-text">
+            <span ng-if="stats.canteenCount === 0">No one in line</span>
+            <span ng-if="stats.canteenCount > 0">{{stats.canteenCount}} in queue</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-label">Photostat queue</span>
+            <span class="stat-sublabel">Print / copy jobs waiting</span>
+          </div>
+          <div class="stat-big-number">
+            <span class="counter-number">{{stats.photostatCount}}</span>
+          </div>
+          <div class="stat-footer-text">
+            <span ng-if="stats.photostatCount === 0">No one in line</span>
+            <span ng-if="stats.photostatCount > 0">{{stats.photostatCount}} in queue</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-label">Food orders</span>
+            <span class="stat-sublabel">Placed via online checkout</span>
+          </div>
+          <div class="stat-big-number">
+            <span class="counter-number">{{stats.orderCount}}</span>
+          </div>
+          <div class="stat-footer-text">
+            <span>Food: {{stats.availableItems}} / {{menu.length}} items available</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-label">Print / photostat jobs</span>
+            <span class="stat-sublabel">Paid jobs submitted</span>
+          </div>
+          <div class="stat-big-number">
+            <span class="counter-number">{{stats.jobCount}}</span>
+          </div>
+          <div class="stat-footer-text">
+            <span>{{stats.studentCount}} unique students seen</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Queues -->
+      <div class="admin-queues">
+        <section class="food-card admin-section">
+          <h2 class="admin-section-title">Canteen queue <span class="admin-chip">{{stats.canteenCount}}</span></h2>
+          <div class="admin-member-list" ng-if="canteen.members.length">
+            <span class="admin-member-chip" ng-repeat="m in canteen.members track by $index">#{{$index + 1}} &middot; {{m.studentId}}</span>
+          </div>
+          <p class="admin-empty" ng-if="!canteen.members.length">No students in the canteen queue.</p>
+        </section>
+
+        <section class="food-card admin-section">
+          <h2 class="admin-section-title">Photostat queue <span class="admin-chip">{{stats.photostatCount}}</span></h2>
+          <div class="admin-member-list" ng-if="photostat.members.length">
+            <span class="admin-member-chip" ng-repeat="m in photostat.members track by $index">#{{$index + 1}} &middot; {{m.studentId}}</span>
+          </div>
+          <p class="admin-empty" ng-if="!photostat.members.length">No students in the photostat queue.</p>
+        </section>
+      </div>
+
+      <!-- Food Availability -->
+      <section class="food-card admin-section">
+        <div class="admin-section-head">
+          <h2 class="admin-section-title">Food availability</h2>
+          <span class="admin-chip">Food: {{stats.availableItems}} available / {{stats.soldOutItems}} sold out</span>
+        </div>
+        <div class="food-option-grid admin-menu-grid">
+          <div class="food-option-card admin-menu-card" ng-repeat="item in menu track by item.id">
+            <span class="food-option-icon">{{item.emoji}}</span>
+            <span class="food-option-name">{{item.name}}</span>
+            <span class="food-option-hint">&#8377;{{item.basePrice}} &middot; {{orderItemCount(item.id)}} ordered</span>
+            <span class="admin-avail" ng-class="item.available ? 'avail-yes' : 'avail-no'" >
+              <span class="busyness-dot" ng-class="{'active': item.available}"></span>
+              {{item.available ? 'Available' : 'Sold out'}}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Food Orders -->
+      <section class="food-card admin-section">
+        <h2 class="admin-section-title">Food orders <span class="admin-chip">{{stats.orderCount}}</span></h2>
+        <div class="admin-table-wrap" ng-if="orders.length">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Order #</th>
+                <th>Student</th>
+                <th>Time</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Type</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="o in orders track by o.orderNo">
+                <td><strong>{{o.orderNo}}</strong></td>
+                <td>{{o._studentId}}</td>
+                <td>{{formatDate(o.placedAt)}} {{formatTime(o.placedAt)}}</td>
+                <td class="admin-items-cell">
+                  <span ng-repeat="it in o.items">
+                    {{it.emoji}} {{it.name}} &times;{{it.qty}}<span ng-if="!$last">, </span>
+                  </span>
+                </td>
+                <td>&#8377;{{o.total}}</td>
+                <td>{{o.paymentDetail || '—'}}</td>
+                <td>{{orderTypeLabel(o.orderType)}}</td>
+                <td><span class="admin-status">{{o.status}}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="admin-empty" ng-if="!orders.length">No orders taken yet. When a student places a food order (pay online) in this browser, it appears here.</p>
+      </section>
+
+      <!-- Print / Photostat Jobs -->
+      <section class="food-card admin-section">
+        <h2 class="admin-section-title">Print / photostat jobs <span class="admin-chip">{{stats.jobCount}}</span></h2>
+        <div class="admin-table-wrap" ng-if="photostatJobs.length">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Job #</th>
+                <th>Student</th>
+                <th>Time</th>
+                <th>Service</th>
+                <th>Pages</th>
+                <th>Files</th>
+                <th>Amount</th>
+                <th>Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="j in photostatJobs track by j.orderNo">
+                <td><strong>{{j.orderNo}}</strong></td>
+                <td>{{j._studentId}}</td>
+                <td>{{formatDate(j.paidAt)}} {{formatTime(j.paidAt)}}</td>
+                <td>{{j.serviceLabel}}</td>
+                <td>{{j.pages}}</td>
+                <td>{{j.files && j.files.length ? j.files.length : '—'}}</td>
+                <td>&#8377;{{j.amount}}</td>
+                <td>{{j.paymentLabel}}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="admin-empty" ng-if="!photostatJobs.length">No print or photostat jobs yet. Submitted jobs from this browser appear here.</p>
+      </section>
+    </div>

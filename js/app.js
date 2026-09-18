@@ -22,6 +22,10 @@
           templateUrl: 'templates/login.html',
           controller: 'LoginController'
         })
+        .when('/admin', {
+          templateUrl: 'templates/admin.html',
+          controller: 'AdminController'
+        })
         .when('/home', {
           templateUrl: 'templates/home.html',
           controller: 'HomeController'
@@ -95,10 +99,12 @@
 
       /**
        * Global Logout action accessible from top navbar.
-       * Also resets the in-memory demo data so the next login starts clean.
+       * Clears any student or admin session and resets the
+       * in-memory demo data so the next login starts clean.
        */
       $rootScope.globalLogout = function () {
         AuthService.logout();
+        AuthService.adminLogout();
         QueueService.resetDemoData();
         $location.path('/login');
       };
@@ -138,10 +144,25 @@
         }
 
         var isAuth = AuthService.isLoggedIn();
+        var isAdmin = AuthService.isAdmin();
         var targetPath = next.originalPath;
 
-        // If not logged in and attempting to access any page other than /login
-        if (!isAuth && targetPath !== '/login') {
+        // Admin session: only the admin dashboard is accessible.
+        if (isAdmin && targetPath !== '/admin') {
+          $location.path('/admin');
+          return;
+        }
+
+        // Non-admins may never open the admin dashboard.
+        if (!isAdmin && targetPath === '/admin') {
+          $location.path('/login');
+          return;
+        }
+
+        // If not logged in (as a student, or as an admin) and attempting to
+        // access any page other than /login. Admins are never required to
+        // hold a student session to open the dashboard.
+        if (!isAuth && !isAdmin && targetPath !== '/login') {
           $location.path('/login');
         }
 
