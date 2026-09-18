@@ -1,0 +1,84 @@
+<div class="login-wrapper">
+  <!-- Decorative background shapes -->
+  <div class="bg-shape bg-shape-1"></div>
+  <div class="bg-shape bg-shape-2"></div>
+
+  <div class="login-card">
+    <!-- Branding -->
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+      </div>
+      <h1 class="brand-name">QueueSync</h1>
+      <p class="brand-tagline">Real-time campus queue tracker</p>
+    </div>
+
+    <!-- Login form -->
+    <form name="loginForm" ng-submit="handleLogin()" novalidate>
+      <div class="form-group">
+        <label for="studentId" class="form-label">
+          Student ID
+          <span class="label-hint">(5 digits ending in 23, 24, 25, 26)</span>
+        </label>
+        
+        <div class="input-with-icon">
+          <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+            <circle cx="9" cy="10" r="2"></circle>
+            <line x1="15" y1="8" x2="17" y2="8"></line>
+            <line x1="15" y1="12" x2="17" y2="12"></line>
+            <line x1="7" y1="16" x2="17" y2="16"></line>
+          </svg>
+          <input
+            type="tel"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="5"
+            id="studentId"
+            name="studentId"
+            class="form-input"
+            placeholder="e.g. 12326 or 54325"
+            ng-model="studentId"
+            ng-disabled="isSubmitting"
+            ng-class="{'input-error': errorMessage}"
+            autocomplete="off"
+            autofocus
+            required
+          >
+        </div>
+
+        <span class="error-message" ng-show="errorMessage" role="alert">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          {{errorMessage}}
+        </span>
+      </div>
+
+      <button
+        type="submit"
+        class="btn-submit"
+        ng-disabled="isSubmitting || !studentId"
+        ng-class="{'btn-disabled': isSubmitting || !studentId}"
+      >
+        <span class="btn-text" ng-hide="isSubmitting">Enter QueueSync</span>
+        <span class="btn-spinner" ng-show="isSubmitting">
+          <span class="spinner"></span>
+          Signing in...
+        </span>
+      </button>
+    </form>
+
+    <!-- Hackathon Footer -->
+    <div class="card-footer">
+      <p>Built for <strong>Your College Name</strong> Hackathon 2025</p>
+    </div>
+  </div>
+</div>

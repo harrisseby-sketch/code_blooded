@@ -1,18 +1,20 @@
 /* ============================================
    QueueSync - Main Application Module & Routing
    AngularJS 1.x Architecture
-   (Root copy mirror of js/app.js)
    ============================================ */
 
 (function () {
   'use strict';
 
+  // Initialize AngularJS module with ngRoute
   var app = angular.module('queueSyncApp', ['ngRoute']);
 
+  // --- Route Configuration ---
   app.config([
     '$routeProvider',
     '$locationProvider',
     function ($routeProvider, $locationProvider) {
+      // Use hash-based routing (#/...) for universal compatibility
       $locationProvider.hashPrefix('');
 
       $routeProvider
@@ -38,24 +40,33 @@
     }
   ]);
 
+  // --- Application Run Block: Route Guards & Global State ---
   app.run([
     '$rootScope',
     '$location',
     'AuthService',
     'QueueService',
     function ($rootScope, $location, AuthService, QueueService) {
+      // Expose services to root scope for layout components (navbar, toast)
       $rootScope.auth = AuthService;
       $rootScope.toast = QueueService.toastState;
 
+      /**
+       * Global Logout action accessible from top navbar
+       */
       $rootScope.globalLogout = function () {
         AuthService.logout();
         $location.path('/login');
       };
 
+      /**
+       * Global Toast dismissal
+       */
       $rootScope.dismissToast = function () {
         QueueService.hideToast();
       };
 
+      // --- Route Authorization Guard ---
       $rootScope.$on('$routeChangeStart', function (event, next) {
         if (!next || !next.originalPath) {
           return;
@@ -64,10 +75,12 @@
         var isAuth = AuthService.isLoggedIn();
         var targetPath = next.originalPath;
 
+        // If not logged in and attempting to access any page other than /login
         if (!isAuth && targetPath !== '/login') {
           $location.path('/login');
         }
 
+        // If already logged in and navigating to /login, redirect to /home
         if (isAuth && targetPath === '/login') {
           $location.path('/home');
         }

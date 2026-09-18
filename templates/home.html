@@ -1,0 +1,148 @@
+<div class="page-container home-view">
+  <!-- Page Header / Hero -->
+  <header class="home-hero">
+    <div class="hero-badge">
+      <span class="pulse-dot"></span>
+      <span>Live Campus Queue Tracker</span>
+    </div>
+    <h1 class="hero-title">Select a Queue</h1>
+    <p class="hero-subtitle">
+      Check live waiting times, reserve your spot, and beat the campus rush without standing in line.
+    </p>
+  </header>
+
+  <!-- Queue Cards Grid (Desktop side-by-side, Mobile stacked) -->
+  <div class="queue-grid">
+
+    <!-- Canteen Card -->
+    <div class="queue-card canteen-card" ng-click="goToQueue('canteen')" role="button" tabindex="0" aria-label="Canteen Queue">
+      <div class="card-pattern card-pattern-canteen"></div>
+      
+      <div class="card-header">
+        <div class="card-icon-wrapper canteen-icon-wrapper">
+          <!-- Food / Canteen SVG -->
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+            <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+            <line x1="6" y1="1" x2="6" y2="4"></line>
+            <line x1="10" y1="1" x2="10" y2="4"></line>
+            <line x1="14" y1="1" x2="14" y2="4"></line>
+          </svg>
+        </div>
+        <div class="card-badge canteen-badge">Dining Hall</div>
+      </div>
+
+      <div class="card-body">
+        <h2 class="card-title">{{queues.canteen.title}}</h2>
+        <p class="card-description">{{queues.canteen.description}}</p>
+
+        <!-- Live Queue Metrics -->
+        <div class="metrics-container">
+          <div class="metric-item">
+            <span class="metric-label">People in queue</span>
+            <div class="metric-value-wrap">
+              <span class="metric-value">{{queues.canteen.count}}</span>
+              <span class="metric-unit">students</span>
+            </div>
+          </div>
+
+          <div class="metric-divider"></div>
+
+          <div class="metric-item">
+            <span class="metric-label">Estimated wait</span>
+            <div class="metric-value-wrap">
+              <span class="metric-value">~{{queues.canteen.waitTime}}</span>
+              <span class="metric-unit">mins</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Personal Queue Status Pill -->
+        <div class="user-status-pill in-queue" ng-show="getUserStatus('canteen').joined">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>You are in this queue (Spot #{{getUserStatus('canteen').position}})</span>
+        </div>
+      </div>
+
+      <!-- Card CTA Footer -->
+      <div class="card-footer-cta">
+        <span class="cta-text">Tap to view details &amp; join queue</span>
+        <svg class="cta-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Photostat Shop Card -->
+    <div class="queue-card photostat-card" ng-click="goToQueue('photostat')" role="button" tabindex="0" aria-label="Photostat Shop Queue">
+      <div class="card-pattern card-pattern-photostat"></div>
+      
+      <div class="card-header">
+        <div class="card-icon-wrapper photostat-icon-wrapper">
+          <!-- Printer / Document SVG -->
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+        </div>
+        <div class="card-badge photostat-badge">Library Annex</div>
+      </div>
+
+      <div class="card-body">
+        <h2 class="card-title">{{queues.photostat.title}}</h2>
+        <p class="card-description">{{queues.photostat.description}}</p>
+
+        <!-- Live Queue Metrics -->
+        <div class="metrics-container">
+          <div class="metric-item">
+            <span class="metric-label">People in queue</span>
+            <div class="metric-value-wrap">
+              <span class="metric-value">{{queues.photostat.count}}</span>
+              <span class="metric-unit">students</span>
+            </div>
+          </div>
+
+          <div class="metric-divider"></div>
+
+          <div class="metric-item">
+            <span class="metric-label">Estimated wait</span>
+            <div class="metric-value-wrap">
+              <span class="metric-value">~{{queues.photostat.waitTime}}</span>
+              <span class="metric-unit">mins</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Personal Queue Status Pill -->
+        <div class="user-status-pill in-queue" ng-show="getUserStatus('photostat').joined">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>You are in this queue (Spot #{{getUserStatus('photostat').position}})</span>
+        </div>
+      </div>
+
+      <!-- Card CTA Footer -->
+      <div class="card-footer-cta">
+        <span class="cta-text">Tap to view details &amp; join queue</span>
+        <svg class="cta-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Info Banner -->
+  <div class="home-info-bar">
+    <div class="info-icon">💡</div>
+    <div class="info-text">
+      <strong>Pro Tip:</strong> Join a queue before leaving class. QueueSync calculates estimated arrival so you reach right on time!
+    </div>
+  </div>
+</div>
