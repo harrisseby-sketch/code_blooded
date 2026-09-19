@@ -27,7 +27,8 @@
     'QueueService',
     'FoodOrderService',
     'DatabaseService',
-    function ($scope, $location, $interval, $window, AuthService, QueueService, FoodOrderService, DatabaseService) {
+    'MultiDeviceSyncService',
+    function ($scope, $location, $interval, $window, AuthService, QueueService, FoodOrderService, DatabaseService, MultiDeviceSyncService) {
 
       // Admin-only route guard
       if (!AuthService.isAdmin()) {
@@ -138,7 +139,7 @@
         } catch (e) { /* noop */ }
         try {
           DatabaseService.getQueueMembers(locationId).forEach(function (m) {
-            if (m && m.student_id && !seen[m.student_id]) {
+            if (m && m.student_id && !seen[m.student_id] && m.student_id.indexOf('@sim-') !== 0) {
               seen[m.student_id] = true;
               out.push({ studentId: m.student_id, joinedAt: m.joined_at });
             }
@@ -190,11 +191,45 @@
           soldOutItems: soldOutItems
         };
 
+        // Live queue vibe, voted by REAL users on any device
+        // (fast / normal / slow + number of reporters).
+        $scope.canteenLive = liveVibe('canteen');
+        $scope.photostatLive = liveVibe('photostat');
+
         $scope.refreshedAt = new Date();
         $scope.isLoading = false;
       };
 
+      function liveVibe(locationId) {
+        try {
+          var info = QueueService.getQueueInfo(locationId);
+          if (info && info.liveStatus) {
+            return {
+              label: info.liveStatus.label,
+              colorClass: info.liveStatus.colorClass,
+              reports: info.liveStatus.reports || 0
+            };
+          }
+        } catch (e) { /* noop */ }
+        return { label: 'Normal', colorClass: 'status-normal', reports: 0 };
+      }
+
       $scope.refresh();
+
+      // ---- Multi-device sync status (live order counts across devices) ----
+      // The "Food orders" stat above is driven by $scope.orders, which is
+      // rebuilt on every 'db:changed' event — including merges of orders
+      // placed on OTHER devices. So the count ticks up live, no refresh.
+      $scope.sync = MultiDeviceSyncService.getStatus();
+      $scope.retrySync = function () {
+        MultiDeviceSyncService.retry();
+        $scope.sync = MultiDeviceSyncService.getStatus();
+      };
+      var unbindSync = $scope.$on('sync:status', function (event, status) {
+        $scope.sync = status;
+        // A fresh sync may have merged remote orders -> recount.
+        $scope.refresh();
+      });
 
       // ---- Live subscriptions: no manual refresh needed ----
       var unbindDb = $scope.$on('db:changed', function () {
@@ -287,6 +322,7 @@
         if (interval) { $interval.cancel(interval); }
         if (unbindDb) { unbindDb(); }
         if (unbindMenu) { unbindMenu(); }
+        if (unbindSync) { unbindSync(); }
       });
     }
   ]);

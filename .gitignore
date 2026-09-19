@@ -14,6 +14,7 @@
 
 # Environment files
 /.env
+js/supabase-config.js
 
 # Angular CLI and build artefacts
 /.angular-cli.json

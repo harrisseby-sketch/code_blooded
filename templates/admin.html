@@ -28,6 +28,30 @@
         </button>
       </header>
 
+      <!-- Multi-device sync status: the Food orders count below ticks up
+           live whenever ANY linked device checks out. -->
+      <section class="food-card admin-section admin-sync-section">
+        <div class="admin-section-head">
+          <h2 class="admin-section-title">
+            Multi-device sync
+            <span class="admin-chip" ng-class="{'sync-live': sync.mode === 'live', 'sync-local': sync.mode !== 'live'}">
+              <span class="busyness-dot" ng-class="{'active': sync.mode === 'live'}"></span>
+              {{sync.mode === 'live' ? 'Live multi-device' : sync.mode === 'connecting' ? 'Connecting…' : sync.mode === 'error' ? 'Sync error — local data' : 'Local demo'}}
+            </span>
+          </h2>
+          <button type="button" class="food-btn-ghost" ng-click="retrySync()">Retry connection</button>
+        </div>
+        <p class="admin-empty" style="margin-bottom:6px">
+          This device: <strong>{{sync.deviceId}}</strong> &middot; {{sync.message}}
+          <span ng-if="sync.lastSyncAt"> &middot; last sync {{formatTime(sync.lastSyncAt)}}</span>
+        </p>
+        <p class="admin-empty" ng-if="sync.mode !== 'live'">
+          To link multiple devices: create a free Supabase project, run <em>supabase-schema.sql</em>, expose the
+          <em>student</em> + <em>admin</em> schemas (Settings &gt; API), then copy
+          <em>js/supabase-config.example.js</em> to <em>js/supabase-config.js</em> with your URL + anon key and reload every device.
+        </p>
+      </section>
+
       <p class="admin-last-refresh" ng-if="refreshedAt">Last refreshed at {{formatTime(refreshedAt)}} &middot; auto-updates every 10s</p>
 
       <!-- Live Stats Grid -->
@@ -87,10 +111,12 @@
         </div>
       </div>
 
-      <!-- Live Queues -->
+      <!-- Live Queues (real members only — no bots) -->
       <div class="admin-queues">
         <section class="food-card admin-section">
-          <h2 class="admin-section-title">Canteen queue <span class="admin-chip">{{stats.canteenCount}}</span></h2>
+          <h2 class="admin-section-title">Canteen queue <span class="admin-chip">{{stats.canteenCount}}</span>
+            <span class="admin-chip" ng-class="canteenLive.colorClass" title="Voted by users on their devices">{{canteenLive.label}} &middot; {{canteenLive.reports}} vote{{canteenLive.reports === 1 ? '' : 's'}}</span>
+          </h2>
           <div class="admin-member-list" ng-if="canteen.members.length">
             <span class="admin-member-chip" ng-repeat="m in canteen.members track by $index">#{{$index + 1}} &middot; {{m.studentId}}</span>
           </div>
@@ -98,7 +124,9 @@
         </section>
 
         <section class="food-card admin-section">
-          <h2 class="admin-section-title">Photostat queue <span class="admin-chip">{{stats.photostatCount}}</span></h2>
+          <h2 class="admin-section-title">Photostat queue <span class="admin-chip">{{stats.photostatCount}}</span>
+            <span class="admin-chip" ng-class="photostatLive.colorClass" title="Voted by users on their devices">{{photostatLive.label}} &middot; {{photostatLive.reports}} vote{{photostatLive.reports === 1 ? '' : 's'}}</span>
+          </h2>
           <div class="admin-member-list" ng-if="photostat.members.length">
             <span class="admin-member-chip" ng-repeat="m in photostat.members track by $index">#{{$index + 1}} &middot; {{m.studentId}}</span>
           </div>
@@ -141,6 +169,7 @@
               <tr>
                 <th>Order #</th>
                 <th>Student</th>
+                <th>Device</th>
                 <th>Time</th>
                 <th>Items</th>
                 <th>Total</th>
@@ -153,6 +182,7 @@
               <tr ng-repeat="o in orders track by o.orderNo">
                 <td><strong>{{o.orderNo}}</strong></td>
                 <td>{{o._studentId}}</td>
+                <td>{{o.originDevice || '—'}}</td>
                 <td>{{formatDate(o.placedAt)}} {{formatTime(o.placedAt)}}</td>
                 <td class="admin-items-cell">
                   <span ng-repeat="it in o.items">

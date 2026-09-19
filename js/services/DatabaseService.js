@@ -65,6 +65,7 @@
             orders: [],         // { id (orderNo), student_id FK, subtotal, tax, total, order_type, payment_detail, notes, status, placed_at }
             order_items: [],    // { id, order_id FK, item_id FK, name, emoji, spec, qty, unit_price, addon_total, line_total }
             queue_members: [],  // { id, queue_id, student_id FK, joined_at }
+            queue_feedback: [], // { id (qf-<queue>-<student>), queue_id, student_id FK, status fast|normal|slow, at } — one row per user per queue, latest wins
             photostat_jobs: []  // passthrough mirror of paid print jobs
           },
           admin_db: {
@@ -77,6 +78,31 @@
       var db = blankDB();
       var suppressBroadcast = false;
       var channel = null;
+
+      // ---- Multi-device identity ----
+      // Each browser gets a stable device tag. Orders carry it as
+      // `origin_device` so the admin dashboard can show WHICH device
+      // an order came from, and the sync layer can merge rows from
+      // many devices without double-counting (dedupe by order id).
+      var DEVICE_KEY = 'queueSync_deviceId';
+      function getDeviceId() {
+        try {
+          var d = $window.localStorage.getItem(DEVICE_KEY);
+          if (!d) {
+            d = 'Device-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+            $window.localStorage.setItem(DEVICE_KEY, d);
+          }
+          return d;
+        } catch (e) {
+          return 'Device-LOCAL';
+        }
+      }
+
+      // Guard flag: while remote rows (another device via Supabase) are
+      // being merged in, the sync layer must NOT push them back out
+      // (prevents echo loops). Push handlers check isRemoteApply().
+      var remoteApply = false;
+      function isRemoteApply() { return remoteApply; }
 
       try {
         if ('BroadcastChannel' in $window) {
@@ -343,6 +369,7 @@
           var order = {
             id: orderNo,
             student_id: studentId,    // FK -> students.id
+            origin_device: getDeviceId(),
             subtotal: subtotal, tax: tax, tax_label: 'GST (5%)',
             total: subtotal + tax,
             order_type: orderMeta.orderType, notes: orderMeta.notes || '',
@@ -391,6 +418,15 @@
         _load();
         var orders = angular.copy(_table('student_db', 'orders'));
         var items = _table('student_db', 'order_items');
+        // Dedupe by order id: the same order can arrive twice (local +
+        // remote merge from another device) — the admin count must not
+        // double-count it.
+        var seen = {};
+        orders = orders.filter(function (o) {
+          if (seen[o.id]) { return false; }
+          seen[o.id] = true;
+          return true;
+        });
         orders.forEach(function (o) {
           o.items = items.filter(function (it) { return it.order_id === o.id; }).map(function (it) {
             return {
@@ -402,6 +438,7 @@
           o.orderNo = o.id; o._studentId = o.student_id; o.placedAt = o.placed_at;
           o.total = o.total; o.paymentDetail = o.payment_detail;
           o.orderType = o.order_type; o.status = o.status;
+          o.originDevice = o.origin_device || null;
         });
         orders.sort(function (a, b) { return new Date(b.placed_at) - new Date(a.placed_at); });
         return orders;
@@ -427,6 +464,7 @@
           if (tbl[i].queue_id === queueId) { tbl.splice(i, 1); }
         }
         (memberStudentIds || []).forEach(function (sid) {
+          if (!sid || sid.indexOf('@sim-') === 0) { return; } // no bots, ever
           _ensureStudent(sid);
           tbl.push({
             id: 'qm-' + _next('queue_member'),
@@ -440,8 +478,88 @@
       function getQueueMembers(queueId) {
         _load();
         return angular.copy(_table('student_db', 'queue_members').filter(function (m) {
-          return m.queue_id === queueId;
+          // Defensive: pre-bot-removal DBs may hold '@sim-…' rows.
+          return m.queue_id === queueId && m.student_id && m.student_id.indexOf('@sim-') !== 0;
         }));
+      }
+
+      // ---- queue_feedback: "how is the queue going?" from REAL users ----
+      // One row per (queue, student) — id is deterministic so repeats from
+      // any device overwrite instead of duplicating (latest wins).
+      function feedbackId(queueId, studentId) {
+        return 'qf-' + queueId + '-' + studentId;
+      }
+
+      function saveFeedback(queueId, studentId, statusValue) {
+        if (['fast', 'normal', 'slow'].indexOf(statusValue) === -1) { return null; }
+        _load();
+        _ensureStudent(studentId);
+        var tbl = _table('student_db', 'queue_feedback');
+        var id = feedbackId(queueId, studentId);
+        var now = new Date().toISOString();
+        for (var i = 0; i < tbl.length; i++) {
+          if (tbl[i].id === id) {
+            tbl[i].status = statusValue;
+            tbl[i].at = now;
+            _persist(); _emit('queue_feedback');
+            return angular.copy(tbl[i]);
+          }
+        }
+        var row = { id: id, queue_id: queueId, student_id: studentId, status: statusValue, at: now };
+        tbl.push(row);
+        _persist(); _emit('queue_feedback');
+        return angular.copy(row);
+      }
+
+      function getFeedback(queueId) {
+        _load();
+        return angular.copy(_table('student_db', 'queue_feedback').filter(function (f) {
+          return f.queue_id === queueId;
+        }));
+      }
+
+      function getAllFeedback() {
+        _load();
+        return angular.copy(_table('student_db', 'queue_feedback'));
+      }
+
+      // Merges feedback rows from other devices. Latest `at` wins per id.
+      function importFeedback(remoteRows) {
+        if (!remoteRows || !remoteRows.length) { return 0; }
+        _load();
+        remoteApply = true;
+        var changed = 0;
+        try {
+          var tbl = _table('student_db', 'queue_feedback');
+          var byId = {};
+          tbl.forEach(function (f) { byId[f.id] = f; });
+          remoteRows.forEach(function (rf) {
+            if (!rf || !rf.id || !rf.queue_id || !rf.student_id) { return; }
+            if (['fast', 'normal', 'slow'].indexOf(rf.status) === -1) { return; }
+            _ensureStudent(rf.student_id);
+            var cur = byId[rf.id];
+            var remoteAt = new Date(rf.at).getTime();
+            var curAt = cur ? new Date(cur.at).getTime() : NaN;
+            if (!cur || (!isNaN(remoteAt) && remoteAt > curAt)) {
+              var row = {
+                id: rf.id, queue_id: rf.queue_id, student_id: rf.student_id,
+                status: rf.status, at: rf.at || new Date().toISOString()
+              };
+              if (cur) {
+                for (var k in row) { cur[k] = row[k]; }
+              } else {
+                tbl.push(row);
+                byId[rf.id] = row;
+              }
+              changed++;
+            }
+          });
+          _persist();
+        } finally {
+          remoteApply = false;
+        }
+        if (changed > 0) { _emit('queue_feedback'); }
+        return changed;
       }
 
       // ---- photostat_jobs mirror ----
@@ -458,6 +576,104 @@
         return angular.copy(_table('student_db', 'photostat_jobs'));
       }
 
+      // ---- Multi-device merge (called by MultiDeviceSyncService) ----
+      // Merges order rows received from OTHER devices into the local DB.
+      // Expected shape per order (Supabase row shape):
+      //   { id, student_id, origin_device, subtotal, tax, tax_label, total,
+      //     order_type, notes, payment_method, payment_detail, status,
+      //     placed_at, items: [{ id, order_id, item_id, name, emoji, spec,
+      //     qty, unit_price, addon_total, line_total }] }
+      // Returns the number of NEW orders merged (0 = all duplicates).
+      function importOrders(remoteOrders) {
+        if (!remoteOrders || !remoteOrders.length) { return 0; }
+        _load();
+        remoteApply = true;
+        var added = 0;
+        try {
+          var orders = _table('student_db', 'orders');
+          var items = _table('student_db', 'order_items');
+          var haveOrder = {};
+          orders.forEach(function (o) { haveOrder[o.id] = true; });
+          var haveItem = {};
+          items.forEach(function (it) { haveItem[it.id] = true; });
+          remoteOrders.forEach(function (ro) {
+            if (!ro || !ro.id || haveOrder[ro.id]) { return; }
+            _ensureStudent(ro.student_id || 'unknown');
+            orders.push({
+              id: ro.id,
+              student_id: ro.student_id || 'unknown',
+              origin_device: ro.origin_device || 'remote',
+              subtotal: ro.subtotal || 0, tax: ro.tax || 0,
+              tax_label: ro.tax_label || 'GST (5%)', total: ro.total || 0,
+              order_type: ro.order_type || 'takeaway', notes: ro.notes || '',
+              payment_method: ro.payment_method || 'online',
+              payment_detail: ro.payment_detail || '',
+              status: ro.status || 'Placed',
+              placed_at: ro.placed_at || new Date().toISOString()
+            });
+            haveOrder[ro.id] = true;
+            added++;
+            (ro.items || []).forEach(function (ri) {
+              if (!ri || !ri.id || haveItem[ri.id]) { return; }
+              items.push({
+                id: ri.id, order_id: ro.id,
+                item_id: ri.item_id, name: ri.name || '', emoji: ri.emoji || '',
+                spec: ri.spec || [], qty: ri.qty || 1,
+                unit_price: ri.unit_price || 0, addon_total: ri.addon_total || 0,
+                line_total: ri.line_total || 0
+              });
+              haveItem[ri.id] = true;
+            });
+          });
+          // Keep the id sequence ahead so locally generated ids never
+          // collide with merged remote ones.
+          db.seq.order = Math.max(db.seq.order || 0, orders.length + 1);
+          db.seq.order_item = Math.max(db.seq.order_item || 0, items.length + 1);
+          _persist();
+        } finally {
+          remoteApply = false;
+        }
+        if (added > 0) { _emit('orders'); _emit('order_items'); }
+        return added;
+      }
+
+      // Merges menu stock rows received from other devices/admins.
+      // Last-write-wins per item id.
+      function importMenuItems(remoteItems) {
+        if (!remoteItems || !remoteItems.length) { return 0; }
+        _load();
+        remoteApply = true;
+        var updated = 0;
+        try {
+          remoteItems.forEach(function (ri) {
+            if (!ri || !ri.id) { return; }
+            var m = _menuItem(ri.id);
+            if (!m) { return; }
+            if (typeof ri.stock_qty === 'number') { m.stock_qty = Math.max(0, ri.stock_qty); }
+            if (typeof ri.available === 'boolean') { m.available = ri.available; }
+            if (m.stock_qty === 0) { m.available = false; }
+            updated++;
+          });
+          _persist();
+        } finally {
+          remoteApply = false;
+        }
+        if (updated > 0) {
+          _emit('menu_items');
+          $rootScope.$broadcast('food:menuUpdated');
+        }
+        return updated;
+      }
+
+      // Raw rows for pushing local state OUT to other devices.
+      function getOrdersForSync() {
+        _load();
+        return {
+          orders: angular.copy(_table('student_db', 'orders')),
+          items: angular.copy(_table('student_db', 'order_items'))
+        };
+      }
+
       // ---- maintenance ----
       function reset() {
         db = blankDB();
@@ -469,6 +685,8 @@
 
       return {
         subscribe: subscribe,
+        getDeviceId: getDeviceId,
+        isRemoteApply: isRemoteApply,
         getMenuItems: getMenuItems,
         getStock: getStock,
         setMenuAvailability: setMenuAvailability,
@@ -481,8 +699,15 @@
         checkout: checkout,
         getAllOrders: getAllOrders,
         getLastOrder: getLastOrder,
+        importOrders: importOrders,
+        importMenuItems: importMenuItems,
+        getOrdersForSync: getOrdersForSync,
         syncQueueMembers: syncQueueMembers,
         getQueueMembers: getQueueMembers,
+        saveFeedback: saveFeedback,
+        getFeedback: getFeedback,
+        getAllFeedback: getAllFeedback,
+        importFeedback: importFeedback,
         savePhotostatJob: savePhotostatJob,
         getAllPhotostatJobs: getAllPhotostatJobs,
         reset: reset

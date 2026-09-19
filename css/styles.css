@@ -3482,6 +3482,14 @@ body {
   margin-left: 8px;
 }
 
+/* Queue vibe votes (status-fast/normal/slow) reuse the live-status
+   palette when rendered as admin chips. */
+.admin-chip.status-fast,
+.admin-chip.status-normal,
+.admin-chip.status-slow {
+  border: 1px solid;
+}
+
 .admin-empty {
   color: var(--text-muted);
   font-size: 0.85rem;
@@ -3542,6 +3550,22 @@ body {
 button.admin-avail {
   cursor: pointer;
   font-family: inherit;
+}
+
+.admin-sync-section {
+  border-style: dashed;
+}
+
+.admin-chip.sync-live {
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success-border);
+}
+
+.admin-chip.sync-local {
+  background: var(--gray-100);
+  color: var(--text-muted);
+  border: 1px solid var(--gray-200);
 }
 
 .admin-stock-row {

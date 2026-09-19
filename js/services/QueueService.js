@@ -120,12 +120,9 @@
         }
       };
 
-      // Seed baseline (simulated "other people") counts so busyness levels
-      // and the auto-decrement simulation are visibly demo-able immediately.
-      var SEED_COUNTS = {
-        canteen: 14,   // -> busyness High
-        photostat: 6   // -> busyness Medium
-      };
+      // No simulated bots: queue occupancy comes purely from REAL users
+      // (orders/checkouts from any device join the queue). Queues start
+      // empty and grow as students join.
 
       // The current user's membership per location.
       // Persisted in sessionStorage so status (and the served flow) survives
@@ -262,44 +259,74 @@
         return { kind: 'normal', text: 'Right now: moderate traffic', colorClass: 'advice-normal' };
       }
 
+      // Feedback older than this is ignored for the live status.
+      var FEEDBACK_TTL_MS = 30 * 60000;
+
       /**
-       * Aggregates all current live status reports for a location.
-       * Uses simple majority ("fast"/"normal"/"slow"), falling back to the
-       * latest report on a tie, then to "normal" when nobody has reported.
-       *
-       * TODO(Firebase): this list of reports would be
-       * onSnapshot(collection(db,'queues',loc,'statusReports')) and the
-       * aggregation can move to a Cloud Function if preferred.
+       * Aggregates "how is the queue going?" feedback from REAL users.
+       * Sources (latest report wins per student):
+       *   - in-memory reports from members on this device (instant), and
+       *   - the shared DB feedback table (this device + every linked
+       *     device via multi-device sync, survives refresh).
+       * Only reports newer than FEEDBACK_TTL_MS count. Simple majority
+       * wins ("fast"/"normal"/"slow"), ties fall back to the latest
+       * report, silence falls back to "normal".
        */
       function getLiveStatus(locationId) {
         var queue = getQueue(locationId);
         if (!queue) {
-          return { value: 'normal', label: 'Normal', colorClass: 'status-normal', icon: 'clock' };
+          return { value: 'normal', label: 'Normal', colorClass: 'status-normal', icon: 'clock', reports: 0 };
         }
 
-        var memberIds = {};
-        queue.members.forEach(function (m) { memberIds[m.studentId] = true; });
+        var cutoff = Date.now() - FEEDBACK_TTL_MS;
+        var byStudent = {}; // studentId -> { status, at }
 
-        // Only honor reports from users currently in the queue.
-        var active = queue.liveStatusReports.filter(function (r) {
-          return memberIds[r.studentId];
+        function consider(studentId, statusValue, at) {
+          if (!studentId || String(studentId).indexOf('@sim-') === 0) { return; }
+          if (['fast', 'normal', 'slow'].indexOf(statusValue) === -1) { return; }
+          var t = at instanceof Date ? at.getTime() : new Date(at).getTime();
+          if (isNaN(t) || t < cutoff) { return; }
+          var prev = byStudent[studentId];
+          if (!prev || t >= prev.at) {
+            byStudent[studentId] = { status: statusValue, at: t };
+          }
+        }
+
+        // In-memory reports from members on this device (instant).
+        queue.liveStatusReports.forEach(function (r) {
+          consider(r.studentId, r.status, r.at);
+        });
+        // Shared DB feedback: this device + every linked device, survives refresh.
+        try {
+          DatabaseService.getFeedback(locationId).forEach(function (f) {
+            consider(f.student_id, f.status, f.at);
+          });
+        } catch (e) { /* DB feedback is best-effort */ }
+
+        var ids = Object.keys(byStudent);
+        var counts = { fast: 0, normal: 0, slow: 0 };
+        var latestAt = 0;
+        var latestStatus = 'normal';
+        ids.forEach(function (sid) {
+          var r = byStudent[sid];
+          counts[r.status] = (counts[r.status] || 0) + 1;
+          if (r.at >= latestAt) {
+            latestAt = r.at;
+            latestStatus = r.status;
+          }
         });
 
-        var counts = { fast: 0, normal: 0, slow: 0 };
-        active.forEach(function (r) { counts[r.status] = (counts[r.status] || 0) + 1; });
-
         var value = 'normal';
-        if (active.length > 0) {
+        if (ids.length > 0) {
           if (counts.fast > counts.normal && counts.fast > counts.slow) {
             value = 'fast';
           } else if (counts.slow > counts.fast && counts.slow > counts.normal) {
             value = 'slow';
-          } else if (counts.normal > 0) {
+          } else if (counts.normal > counts.fast && counts.normal > counts.slow) {
             value = 'normal';
           } else {
-            // Tie (e.g. fast & slow) -> use the most recent report.
-            var latest = active[active.length - 1];
-            value = latest.status;
+            // Tie (or all equal) -> the most recent reporter decides.
+            value = latestStatus;
           }
         }
 
@@ -308,7 +335,9 @@
           normal: { value: 'normal', label: 'Normal',      colorClass: 'status-normal', icon: 'clock' },
           slow:   { value: 'slow',   label: 'Moving slow', colorClass: 'status-slow',   icon: 'slow' }
         };
-        return map[value] || map.normal;
+        var out = map[value] || map.normal;
+        out.reports = ids.length;
+        return out;
       }
 
       /**
@@ -340,32 +369,17 @@
       // ============================================
 
       /**
-       * Re-populates each queue with simulated "other people" so the demo
-       * always starts with healthy queue lengths. Called on first run and on
-       * logout (clean slate for the next demo user).
+       * Initializes each queue EMPTY. No bots — every member is a real
+       * student who joined from some device. Called on first run and on
+       * logout (clean slate for the next user). Surviving membership of
+       * the current session is restored separately via restoreMembership().
        */
-      function seedQueues() {
+      function initQueues() {
         Object.keys(queues).forEach(function (locationId) {
           var queue = queues[locationId];
-          var seedCount = SEED_COUNTS[locationId] || 0;
           queue.members = [];
           queue.liveStatusReports = [];
           queue.seeded = true;
-
-          for (var i = 1; i <= seedCount; i++) {
-            queue.members.push({
-              studentId: '@sim-' + locationId + '-' + i,
-              simulated: true,
-              joinedAt: new Date(Date.now() - (i * queue.timePerPerson * 60000))
-            });
-          }
-
-          // A few baseline simulated status reports keep the live status thinking
-          queue.liveStatusReports.push(
-            { studentId: '@sim-' + locationId + '-1', status: 'normal', at: new Date() },
-            { studentId: '@sim-' + locationId + '-2', status: locationId === 'canteen' ? 'fast' : 'slow', at: new Date() }
-          );
-
           restartServeTimer(locationId);
           mirrorQueueToDb(locationId);
         });
@@ -849,12 +863,11 @@
 
       /**
        * Records the current user's live-status report for a queue.
-       * Only honored while the user is a member.
+       * Only honored while the user is a member. The report is stored
+       * in-memory (instant) AND in the shared DB feedback table, so it
+       * survives refresh and reaches every linked device + the admin
+       * dashboard via multi-device sync.
        * @returns {Promise<Object>} aggregate live status
-       *
-       * TODO(Firebase): set(doc(db,'queues',loc,'statusReports',studentId), status)
-       * The aggregation (`getLiveStatus`) would derive from onSnapshot of that
-       * sub-collection.
        */
       function updateLiveStatus(locationId, studentId, statusValue) {
         var deferred = $q.defer();
@@ -886,6 +899,11 @@
           if (!found) {
             queue.liveStatusReports.push({ studentId: studentId, status: statusValue, at: new Date() });
           }
+
+          // Persist to the shared DB: visible to admin + other devices.
+          try {
+            DatabaseService.saveFeedback(locationId, studentId, statusValue);
+          } catch (e) { /* DB write is best-effort */ }
 
           var aggregate = getLiveStatus(locationId);
           deferred.resolve(aggregate);
@@ -941,13 +959,13 @@
           status.joinedAt = null;
         });
         persistMembership();
-        seedQueues();
+        initQueues();
       }
 
       // ============================================
       //              INITIALIZATION
       // ============================================
-      seedQueues();
+      initQueues();
       restoreMembership();
 
       return {

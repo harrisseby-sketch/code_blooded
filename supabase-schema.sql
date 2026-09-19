@@ -70,6 +70,7 @@ create index if not exists cart_lines_cart_idx on student.cart_lines(cart_id);
 create table if not exists student.orders (
   id text primary key,             -- orderNo, e.g. FD-XXXXX-n
   student_id text not null references student.students(id) on delete cascade,
+  origin_device text not null default 'unknown', -- which device placed it
   subtotal integer not null default 0,
   tax integer not null default 0,
   tax_label text not null default 'GST (5%)',
@@ -104,6 +105,18 @@ create table if not exists student.queue_members (
   joined_at timestamptz not null default now()
 );
 create index if not exists queue_members_queue_idx on student.queue_members(queue_id);
+
+-- "How is the queue going?" reports from REAL users (no bots).
+-- One row per (queue, student): id is deterministic (qf-<queue>-<student>)
+-- so repeats from any device overwrite instead of duplicating.
+create table if not exists student.queue_feedback (
+  id text primary key,
+  queue_id text not null,          -- 'canteen' | 'photostat'
+  student_id text not null references student.students(id) on delete cascade,
+  status text not null check (status in ('fast', 'normal', 'slow')),
+  at timestamptz not null default now()
+);
+create index if not exists queue_feedback_queue_idx on student.queue_feedback(queue_id, at desc);
 
 create table if not exists student.photostat_jobs (
   id text primary key,
@@ -179,5 +192,35 @@ end;
 $$;
 
 -- ---------- REALTIME (run in Supabase dashboard > Database > Replication) ----------
--- alter publication supabase_realtime add table
---   admin.menu_items, student.orders, student.order_items, student.queue_members;
+-- 1. Expose the schemas to the API:
+--      Settings > API > Exposed schemas > add `student` and `admin`.
+-- 2. Add the tables to the realtime publication:
+--      alter publication supabase_realtime add table
+--        student.orders, student.order_items, student.queue_feedback,
+--        admin.menu_items;
+
+-- ---------- DEMO RLS (hackathon only — do NOT use in production) ----------
+-- Allows any device with the anon key to read/write, which is exactly
+-- what the multi-device demo needs. For production, replace with
+-- per-student policies (e.g. auth.uid() = student_id).
+alter table admin.menu_items      enable row level security;
+alter table admin.inventory_log   enable row level security;
+alter table student.students      enable row level security;
+alter table student.carts         enable row level security;
+alter table student.cart_lines    enable row level security;
+alter table student.orders        enable row level security;
+alter table student.order_items   enable row level security;
+alter table student.queue_members enable row level security;
+alter table student.queue_feedback enable row level security;
+alter table student.photostat_jobs enable row level security;
+
+create policy "demo open access" on admin.menu_items       for all using (true) with check (true);
+create policy "demo open access" on admin.inventory_log    for all using (true) with check (true);
+create policy "demo open access" on student.students       for all using (true) with check (true);
+create policy "demo open access" on student.carts          for all using (true) with check (true);
+create policy "demo open access" on student.cart_lines     for all using (true) with check (true);
+create policy "demo open access" on student.orders         for all using (true) with check (true);
+create policy "demo open access" on student.order_items    for all using (true) with check (true);
+create policy "demo open access" on student.queue_members  for all using (true) with check (true);
+create policy "demo open access" on student.queue_feedback for all using (true) with check (true);
+create policy "demo open access" on student.photostat_jobs for all using (true) with check (true);
