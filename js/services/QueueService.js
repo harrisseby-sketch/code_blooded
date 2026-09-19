@@ -18,7 +18,8 @@
     '$window',
     'AuthService',
     'UserService',
-    function ($q, $timeout, $rootScope, $window, AuthService, UserService) {
+    'DatabaseService',
+    function ($q, $timeout, $rootScope, $window, AuthService, UserService, DatabaseService) {
 
       // ============================================
       //        CONFIGURATION (per location)
@@ -366,6 +367,7 @@
           );
 
           restartServeTimer(locationId);
+          mirrorQueueToDb(locationId);
         });
       }
 
@@ -489,6 +491,8 @@
       /**
        * Recomputes count, wait time, busyness and the current user's position
        * after any mutation. Broadcasts the canonical "queue:updated" event.
+       * Also mirrors membership into the virtual live DB so the admin
+       * dashboard (same browser other tab, or after refresh) stays live.
        */
       function finalizeQueueState(locationId, servedMember) {
         var queue = getQueue(locationId);
@@ -497,12 +501,27 @@
         }
 
         recomputeUserPosition(locationId, false);
+        mirrorQueueToDb(locationId);
 
         $rootScope.$broadcast('queue:updated', {
           locationId: locationId,
           queue: queue,
           servedMember: servedMember || null
         });
+      }
+
+      /**
+       * Mirrors the in-memory FIFO member list into
+       * student_db.queue_members (FK student_id -> students.id) so the
+       * admin dashboard has a live, shared view of both queues.
+       */
+      function mirrorQueueToDb(locationId) {
+        try {
+          var queue = getQueue(locationId);
+          if (!queue || !DatabaseService) { return; }
+          var ids = queue.members.map(function (m) { return m.studentId; });
+          DatabaseService.syncQueueMembers(locationId, ids);
+        } catch (e) { /* DB mirror is best-effort */ }
       }
 
       /**

@@ -1,24 +1,19 @@
 /* ============================================
-   QueueSync - FoodOrderService
+   QueueSync - FoodOrderService (DB-backed)
    Campus food ordering: menu catalog (Biriyani,
    Alfam, Meals, Chapathi), item customizations,
    shopping cart, pricing & checkout.
 
-   Session-backed like the other demo services:
-   the cart and the last placed order survive
-   navigation (and refresh) while logged in.
+   STORAGE: the virtual live DatabaseService
+   (student_db.carts/cart_lines/orders/order_items
+   linked by FK to admin_db.menu_items stock).
+   Checkout is one atomic DB transaction over ALL
+   cart lines, so N items in -> N items ordered.
 
    Pricing model per item:
-     - radio options (variant / portion / size /
-       spice) apply a PER-UNIT delta
-     - multi options (extra items / add-ons /
-       sides) apply a ONE-TIME per-line delta
+     - radio options apply a PER-UNIT delta
+     - multi options apply a ONE-TIME per-line delta
      - lineTotal = qty x unitPrice + addonTotal
-
-   TODO(Firebase): menu items become a Firestore
-   collection and each order is written to
-   orders/{orderNo} so the food counter can see
-   it in real time.
    ============================================ */
 
 (function () {
@@ -28,14 +23,13 @@
     '$window',
     '$rootScope',
     'AuthService',
-    function ($window, $rootScope, AuthService) {
+    'DatabaseService',
+    function ($window, $rootScope, AuthService, DatabaseService) {
 
-      var CART_KEY = 'queueSync_foodCart_';
-      var ORDER_KEY = 'queueSync_foodOrder_';
-
+      var LEGACY_CART_KEY = 'queueSync_foodCart_';
+      var LEGACY_ORDER_KEY = 'queueSync_foodOrder_';
       var TAX_RATE = 0.05;
       var TAX_LABEL = 'GST (5%)';
-
       var MIN_QTY = 1;
       var MAX_QTY = 10;
 
@@ -48,7 +42,6 @@
           description: 'Long-grain basmati rice slow-cooked with aromatic biriyani spices and your choice of protein.',
           basePrice: 120,
           unitHint: 'per plate',
-          available: true,
           veg: false,
           options: [
             {
@@ -74,7 +67,6 @@
           description: 'Wok-tossed egg noodles with crunchy vegetables and a punchy house sauce.',
           basePrice: 90,
           unitHint: 'per plate',
-          available: true,
           veg: false,
           options: [
             {
@@ -119,7 +111,6 @@
           description: 'A wholesome plated meal with rice, curry, vegetables and a crispy paapad on the side.',
           basePrice: 70,
           unitHint: 'per plate',
-          available: true,
           veg: true,
           options: [
             {
@@ -153,7 +144,6 @@
           description: 'Soft, hand-rolled whole-wheat flatbreads fresh off the tawa.',
           basePrice: 15,
           unitHint: 'per piece',
-          available: true,
           veg: true,
           options: [
             {
@@ -169,64 +159,56 @@
         }
       ];
 
-      var pendingStudentId = null;
-      var cartLines = [];
-      var lastOrder = null;
-
       function currentStudentId() {
         return AuthService.getStudentId();
       }
 
-      function loadState() {
+      // One-time migration of the legacy per-tab sessionStorage cart into
+      // the shared DB so existing demo carts are not lost on upgrade.
+      var migratedFor = {};
+      function migrateLegacyOnce() {
         var sid = currentStudentId();
-        if (pendingStudentId === sid) {
-          return;
-        }
-        pendingStudentId = sid;
-        cartLines = [];
-        lastOrder = null;
-        if (!sid) {
-          return;
-        }
+        if (!sid || migratedFor[sid]) { return; }
+        migratedFor[sid] = true;
         try {
-          var cartRaw = $window.sessionStorage.getItem(CART_KEY + sid);
-          if (cartRaw) {
-            var parsed = JSON.parse(cartRaw);
-            if (parsed && angular.isArray(parsed)) {
-              cartLines = parsed;
-            }
-          }
-          var orderRaw = $window.sessionStorage.getItem(ORDER_KEY + sid);
-          if (orderRaw) {
-            lastOrder = JSON.parse(orderRaw);
-          }
-        } catch (e) {
-          cartLines = [];
-          lastOrder = null;
-        }
-      }
-
-      function persistCart() {
-        var sid = currentStudentId();
-        if (!sid) { return; }
-        try {
-          $window.sessionStorage.setItem(CART_KEY + sid, JSON.stringify(cartLines));
-        } catch (e) { /* noop */ }
-        $rootScope.$broadcast('food:cartUpdated');
-      }
-
-      function persistOrder() {
-        var sid = currentStudentId();
-        if (!sid) { return; }
-        try {
-          $window.sessionStorage.setItem(ORDER_KEY + sid, JSON.stringify(lastOrder));
+          if (DatabaseService.getCartLines(sid).length > 0) { return; }
+          var raw = $window.sessionStorage.getItem(LEGACY_CART_KEY + sid);
+          if (!raw) { return; }
+          var parsed = JSON.parse(raw);
+          if (!parsed || !angular.isArray(parsed) || !parsed.length) { return; }
+          parsed.forEach(function (line) {
+            try {
+              if (line && line.itemId) {
+                DatabaseService.addCartLine(sid, line.itemId, line.config, line.qty);
+              }
+            } catch (e) { /* skip bad legacy line */ }
+          });
+          $window.sessionStorage.removeItem(LEGACY_CART_KEY + sid);
         } catch (e) { /* noop */ }
       }
 
-      // ---- Menu helpers ----
+      // ---- Menu helpers (availability + stock merged live from admin_db) ----
+
+      function stockMap() {
+        var map = {};
+        try {
+          DatabaseService.getMenuItems().forEach(function (m) { map[m.id] = m; });
+        } catch (e) { /* DB unavailable -> treat as fully available */ }
+        return map;
+      }
 
       function getMenu() {
-        return angular.copy(MENU);
+        migrateLegacyOnce();
+        var stocks = stockMap();
+        return MENU.map(function (item) {
+          var copy = angular.copy(item);
+          var s = stocks[item.id];
+          copy.stockQty = s ? s.stock_qty : 999;
+          // Sold out when admin marks unavailable OR stock hits 0.
+          copy.available = s ? (s.available && s.stock_qty > 0) : true;
+          if (s) { copy.basePrice = s.base_price; }
+          return copy;
+        });
       }
 
       function getCategories() {
@@ -240,10 +222,10 @@
       }
 
       function getItemById(itemId) {
-        for (var i = 0; i < MENU.length; i++) {
-          if (MENU[i].id === itemId) {
-            return MENU[i];
-          }
+        // Enriched (with live availability) when possible.
+        var menu = getMenu();
+        for (var i = 0; i < menu.length; i++) {
+          if (menu[i].id === itemId) { return menu[i]; }
         }
         return null;
       }
@@ -323,49 +305,50 @@
         return parts;
       }
 
-      // ---- Cart ----
+      // ---- Cart (DB-backed; always re-read fresh, never stale cache) ----
+
+      function enrichLine(dbLine) {
+        var item = getItemById(dbLine.item_id);
+        if (!item) { return null; }
+        var unitPrice = getUnitPrice(item, dbLine.config);
+        var addonTotal = getAddonTotal(item, dbLine.config);
+        return {
+          key: dbLine.id,
+          itemId: item.id,
+          item: item,
+          config: angular.copy(dbLine.config),
+          qty: dbLine.qty,
+          unitPrice: unitPrice,
+          addonTotal: addonTotal,
+          lineTotal: unitPrice * dbLine.qty + addonTotal,
+          spec: getSummaryParts(item, dbLine.config)
+        };
+      }
 
       function getCartLines() {
-        loadState();
-        return cartLines.map(function (line) {
-          var item = getItemById(line.itemId);
-          if (!item) { return null; }
-          var unitPrice = getUnitPrice(item, line.config);
-          var addonTotal = getAddonTotal(item, line.config);
-          return {
-            key: line.key,
-            itemId: item.id,
-            item: item,
-            config: line.config,
-            qty: line.qty,
-            unitPrice: unitPrice,
-            addonTotal: addonTotal,
-            lineTotal: unitPrice * line.qty + addonTotal,
-            spec: getSummaryParts(item, line.config)
-          };
-        }).filter(Boolean);
+        migrateLegacyOnce();
+        var sid = currentStudentId();
+        if (!sid) { return []; }
+        return DatabaseService.getCartLines(sid).map(enrichLine).filter(Boolean);
       }
 
       function getCartItemCount() {
-        var lines = getCartLines();
         var total = 0;
-        lines.forEach(function (line) { total += line.qty; });
+        getCartLines().forEach(function (line) { total += line.qty; });
         return total;
       }
 
       function getInCartCount(itemId) {
-        var lines = getCartLines();
         var total = 0;
-        lines.forEach(function (line) {
+        getCartLines().forEach(function (line) {
           if (line.itemId === itemId) { total += line.qty; }
         });
         return total;
       }
 
       function getSubtotal() {
-        var lines = getCartLines();
         var total = 0;
-        lines.forEach(function (line) { total += line.lineTotal; });
+        getCartLines().forEach(function (line) { total += line.lineTotal; });
         return total;
       }
 
@@ -389,120 +372,147 @@
         };
       }
 
+      function notifyCart() {
+        $rootScope.$broadcast('food:cartUpdated');
+      }
+
       function addToCart(itemId, config, qty) {
-        loadState();
+        var sid = currentStudentId();
+        if (!sid) { return; }
         var item = getItemById(itemId);
-        if (!item) { return; }
+        if (!item || !item.available) { return; }
         var safeQty = Math.max(MIN_QTY, Math.min(MAX_QTY, qty || 1));
-        cartLines.push({
-          key: generateLineKey(),
-          itemId: itemId,
-          config: angular.copy(config || defaultConfig(item)),
-          qty: safeQty
-        });
-        persistCart();
+        DatabaseService.addCartLine(sid, itemId, angular.copy(config || defaultConfig(item)), safeQty);
+        notifyCart();
       }
 
       function updateLine(lineKey, config, qty) {
-        loadState();
-        for (var i = 0; i < cartLines.length; i++) {
-          if (cartLines[i].key === lineKey) {
-            cartLines[i].config = config;
-            cartLines[i].qty = Math.max(MIN_QTY, Math.min(MAX_QTY, qty || 1));
-            persistCart();
-            return;
-          }
-        }
+        var sid = currentStudentId();
+        if (!sid) { return; }
+        DatabaseService.updateCartLine(sid, lineKey, config, qty);
+        notifyCart();
       }
 
       function removeLine(lineKey) {
-        loadState();
-        cartLines = cartLines.filter(function (line) { return line.key !== lineKey; });
-        persistCart();
+        var sid = currentStudentId();
+        if (!sid) { return; }
+        DatabaseService.removeCartLine(sid, lineKey);
+        notifyCart();
       }
 
       function clearCart() {
-        loadState();
-        cartLines = [];
-        persistCart();
+        var sid = currentStudentId();
+        if (!sid) { return; }
+        DatabaseService.clearCart(sid);
+        notifyCart();
       }
 
-      // ---- Orders ----
+      // ---- Orders (atomic: every line becomes an order_item) ----
+
+      function priceView(v) {
+        var item = getItemById(v.itemId);
+        var unitPrice = getUnitPrice(item, v.config);
+        var addonTotal = getAddonTotal(item, v.config);
+        return {
+          name: item.name,
+          emoji: item.emoji,
+          spec: getSummaryParts(item, v.config),
+          unitPrice: unitPrice,
+          addonTotal: addonTotal,
+          lineTotal: unitPrice * v.qty + addonTotal
+        };
+      }
 
       function placeOrder(details) {
-        loadState();
         var sid = currentStudentId();
         if (!sid || getCartItemCount() === 0) {
           return null;
         }
-        var lines = getCartLines();
-        var subtotal = getSubtotal();
-        var tax = getTax();
-        var items = lines.map(function (line) {
-          return {
-            key: line.key,
-            itemId: line.itemId,
-            name: line.item.name,
-            emoji: line.item.emoji,
-            category: line.item.category,
-            spec: line.spec,
-            qty: line.qty,
-            unitPrice: line.unitPrice,
-            addonTotal: line.addonTotal,
-            lineTotal: line.lineTotal
-          };
-        });
-
-        var order = {
-          orderNo: generateOrderNumber(),
-          studentId: sid,
-          customerName: details.customerName,
-          phone: details.phone,
+        var result = DatabaseService.checkout(sid, {
           orderType: details.orderType,
           notes: details.notes || '',
           paymentMethod: details.paymentMethod,
-          paymentDetail: details.paymentDetail || '',
+          paymentDetail: details.paymentDetail || ''
+        }, priceView);
+        if (!result) { return null; }
+        notifyCart();
+        var o = result.order;
+        return {
+          orderNo: o.id,
+          studentId: sid,
+          customerName: details.customerName,
+          phone: details.phone,
+          orderType: o.order_type,
+          notes: o.notes,
+          paymentMethod: o.payment_method,
+          paymentDetail: o.payment_detail,
           locationId: details.locationId || '',
           queuePosition: (typeof details.queuePosition === 'number') ? details.queuePosition : null,
-          items: items,
-          subtotal: subtotal,
-          tax: tax,
-          taxLabel: TAX_LABEL,
-          total: subtotal + tax,
-          placedAt: new Date(),
-          status: 'Placed'
+          items: result.items.map(function (it) {
+            return {
+              key: it.id, itemId: it.item_id, name: it.name, emoji: it.emoji,
+              category: '', spec: it.spec, qty: it.qty,
+              unitPrice: it.unit_price, addonTotal: it.addon_total, lineTotal: it.line_total
+            };
+          }),
+          subtotal: o.subtotal,
+          tax: o.tax,
+          taxLabel: o.tax_label,
+          total: o.total,
+          placedAt: new Date(o.placed_at),
+          status: o.status
         };
-
-        lastOrder = order;
-        cartLines = [];
-        persistCart();
-        persistOrder();
-        return order;
       }
 
       function getLastOrder() {
-        loadState();
-        return lastOrder;
+        var sid = currentStudentId();
+        if (!sid) { return null; }
+        var o = DatabaseService.getLastOrder(sid);
+        if (!o) {
+          // Legacy fallback: single last order stored per-tab pre-upgrade.
+          try {
+            var raw = $window.sessionStorage.getItem(LEGACY_ORDER_KEY + sid);
+            if (raw) {
+              var legacy = JSON.parse(raw);
+              if (legacy && legacy.orderNo) { return legacy; }
+            }
+          } catch (e) { /* noop */ }
+          return null;
+        }
+        return {
+          orderNo: o.id,
+          studentId: sid,
+          orderType: o.orderType,
+          notes: '',
+          paymentMethod: 'online',
+          paymentDetail: o.paymentDetail,
+          items: o.items,
+          subtotal: o.subtotal,
+          tax: o.tax,
+          taxLabel: o.taxLabel,
+          total: o.total,
+          placedAt: new Date(o.placedAt),
+          status: o.status
+        };
       }
 
       function clearLastOrder() {
-        loadState();
-        lastOrder = null;
-        try {
-          var sid = currentStudentId();
-          if (sid) {
-            $window.sessionStorage.removeItem(ORDER_KEY + sid);
-          }
-        } catch (e) { /* noop */ }
+        // No-op kept for API compatibility: history now lives in the DB
+        // (admin dashboard reads the full orders table).
       }
 
-      function generateOrderNumber() {
-        return 'FD-' + Math.floor(10000 + Math.random() * 90000);
-      }
-
-      function generateLineKey() {
-        return Date.now().toString(36) + '-' + Math.floor(Math.random() * 100000).toString(36);
-      }
+      // Live cross-tab sync: another tab (student checkout / admin restock)
+      // -> refresh every listener via the canonical cart event + digest.
+      DatabaseService.subscribe('cart_lines', function () { notifyCart(); });
+      DatabaseService.subscribe('menu_items', function () {
+        $rootScope.$broadcast('food:menuUpdated');
+      });
+      try {
+        $window.addEventListener('storage', function () {
+          notifyCart();
+          $rootScope.$broadcast('food:menuUpdated');
+        });
+      } catch (e) { /* noop */ }
 
       return {
         MIN_QTY: MIN_QTY,
@@ -534,4 +544,5 @@
       };
     }
   ]);
+
 })();

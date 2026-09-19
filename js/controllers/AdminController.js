@@ -1,10 +1,18 @@
 /* ============================================
-   QueueSync - AdminController
+   QueueSync - AdminController (live DB-backed)
    Admin dashboard: live queue occupancy, food
-   availability, placed food orders and print /
-   photostat jobs. Reads the same session-backed
-   demo data stores used by the student app.
-   TODO(Firebase): admin reads real Firestore data.
+   stock / availability, placed food orders and
+   print / photostat jobs.
+
+   LIVE UPDATES: subscribes to the virtual live DB
+   (DatabaseService) instead of polling sessionStorage:
+     - student checkout -> orders/order_items tables change
+       -> stock_qty decrements in admin_db.menu_items
+       -> this dashboard refreshes instantly (same tab via
+          $rootScope event, other tabs via storage event).
+     - admin restock / sold-out toggle -> menu_items change
+       -> student menu updates live via 'food:menuUpdated'.
+   A 10s $interval refresh is kept only as a safety net.
    ============================================ */
 
 (function () {
@@ -18,7 +26,8 @@
     'AuthService',
     'QueueService',
     'FoodOrderService',
-    function ($scope, $location, $interval, $window, AuthService, QueueService, FoodOrderService) {
+    'DatabaseService',
+    function ($scope, $location, $interval, $window, AuthService, QueueService, FoodOrderService, DatabaseService) {
 
       // Admin-only route guard
       if (!AuthService.isAdmin()) {
@@ -45,10 +54,24 @@
       };
 
       /**
-       * Reads every stored food order across all students
-       * (keys of the form queueSync_foodOrder_<studentId>).
+       * Orders come from the shared DB (student_db.orders JOIN
+       * student_db.order_items), so EVERY student's EVERY order with ALL
+       * its items is visible — never just the current tab's last order.
+       * A legacy sessionStorage scan is kept as a fallback for orders
+       * placed before this upgrade.
        */
       function readAllFoodOrders() {
+        var orders = [];
+        try {
+          orders = DatabaseService.getAllOrders();
+        } catch (e) { orders = []; }
+        if (!orders.length) {
+          orders = readLegacyFoodOrders();
+        }
+        return orders;
+      }
+
+      function readLegacyFoodOrders() {
         var orders = [];
         try {
           for (var i = 0; i < $window.sessionStorage.length; i++) {
@@ -58,7 +81,7 @@
               try {
                 var order = JSON.parse($window.sessionStorage.getItem(key));
                 if (order && order.orderNo) {
-                  order._studentId = sid;
+                  order._studentId = order._studentId || sid;
                   orders.push(order);
                 }
               } catch (e) { /* skip corrupt entry */ }
@@ -71,12 +94,11 @@
         return orders;
       }
 
-      /**
-       * Reads every stored print / photostat job
-       * (keys of the form queueSync_photostatJob_<studentId>).
-       */
       function readAllPhotostatJobs() {
         var jobs = [];
+        try {
+          jobs = DatabaseService.getAllPhotostatJobs();
+        } catch (e) { jobs = []; }
         try {
           for (var i = 0; i < $window.sessionStorage.length; i++) {
             var key = $window.sessionStorage.key(i);
@@ -93,9 +115,36 @@
           }
         } catch (e) { /* noop */ }
         jobs.sort(function (a, b) {
-          return new Date(b.paidAt) - new Date(a.paidAt);
+          return new Date(b.paidAt || b.at) - new Date(a.paidAt || a.at);
         });
         return jobs;
+      }
+
+      /**
+       * Queue members: live in-memory list first (includes simulation),
+       * merged with the DB mirror so checkouts from other tabs appear.
+       */
+      function readQueueMembers(locationId) {
+        var seen = {};
+        var out = [];
+        try {
+          var q = QueueService.getQueue(locationId);
+          (q ? q.members : []).forEach(function (m) {
+            if (m && m.studentId && !seen[m.studentId]) {
+              seen[m.studentId] = true;
+              out.push(m);
+            }
+          });
+        } catch (e) { /* noop */ }
+        try {
+          DatabaseService.getQueueMembers(locationId).forEach(function (m) {
+            if (m && m.student_id && !seen[m.student_id]) {
+              seen[m.student_id] = true;
+              out.push({ studentId: m.student_id, joinedAt: m.joined_at });
+            }
+          });
+        } catch (e) { /* noop */ }
+        return out;
       }
 
       /**
@@ -104,12 +153,10 @@
       $scope.refresh = function () {
         $scope.isLoading = true;
 
-        var cq = QueueService.getQueue('canteen');
-        $scope.canteen.members = cq ? cq.members.slice() : [];
+        $scope.canteen.members = readQueueMembers('canteen');
         $scope.canteen.count = $scope.canteen.members.length;
 
-        var pq = QueueService.getQueue('photostat');
-        $scope.photostat.members = pq ? pq.members.slice() : [];
+        $scope.photostat.members = readQueueMembers('photostat');
         $scope.photostat.count = $scope.photostat.members.length;
 
         $scope.menu = FoodOrderService.getMenu();
@@ -122,7 +169,10 @@
           if (m.studentId) { studentIds[m.studentId] = true; }
         });
         $scope.orders.forEach(function (o) { if (o._studentId) { studentIds[o._studentId] = true; } });
-        $scope.photostatJobs.forEach(function (j) { if (j._studentId) { studentIds[j._studentId] = true; } });
+        $scope.photostatJobs.forEach(function (j) {
+          if (j._studentId) { studentIds[j._studentId] = true; }
+          else if (j.student_id) { studentIds[j.student_id] = true; }
+        });
 
         var availableItems = 0;
         var soldOutItems = 0;
@@ -146,6 +196,42 @@
 
       $scope.refresh();
 
+      // ---- Live subscriptions: no manual refresh needed ----
+      var unbindDb = $scope.$on('db:changed', function () {
+        $scope.refresh();
+      });
+      var unbindMenu = $scope.$on('food:menuUpdated', function () {
+        $scope.refresh();
+      });
+
+      // ---- Admin stock / availability controls (live to students) ----
+      $scope.toggleAvailability = function (item) {
+        try {
+          DatabaseService.setMenuAvailability(item.id, !item.available);
+        } catch (e) { /* noop */ }
+        $scope.refresh();
+      };
+
+      $scope.restock = function (item, qty) {
+        var q = parseInt(qty, 10);
+        if (isNaN(q) || q < 0) { return; }
+        try {
+          DatabaseService.setStock(item.id, q);
+        } catch (e) { /* noop */ }
+        $scope.refresh();
+      };
+
+      $scope.adjustStock = function (item, delta) {
+        try {
+          var current = 0;
+          $scope.menu.forEach(function (m) {
+            if (m.id === item.id) { current = m.stockQty || 0; }
+          });
+          DatabaseService.setStock(item.id, Math.max(0, current + delta));
+        } catch (e) { /* noop */ }
+        $scope.refresh();
+      };
+
       /**
        * Total quantity ordered for a given menu item.
        */
@@ -153,7 +239,7 @@
         var count = 0;
         ($scope.orders || []).forEach(function (o) {
           (o.items || []).forEach(function (it) {
-            if (it.itemId === itemId) { count += it.qty; }
+            if (it.itemId === itemId || it.id === itemId) { count += it.qty; }
           });
         });
         return count;
@@ -161,7 +247,7 @@
 
       $scope.orderTypeLabel = function (id) {
         var map = { takeaway: 'Takeaway', pickup: 'Pickup', 'dine-in': 'Dine-in' };
-        return map[id] || id || '\u2014';
+        return map[id] || id || '—';
       };
 
       /**
@@ -169,7 +255,7 @@
        */
       $scope.formatTime = function (value) {
         var d = new Date(value);
-        if (isNaN(d.getTime())) { return '\u2014'; }
+        if (isNaN(d.getTime())) { return '—'; }
         var pad = function (n) { return (n < 10 ? '0' : '') + n; };
         return pad(d.getHours()) + ':' + pad(d.getMinutes());
       };
@@ -179,7 +265,7 @@
        */
       $scope.formatDate = function (value) {
         var d = new Date(value);
-        if (isNaN(d.getTime())) { return '\u2014'; }
+        if (isNaN(d.getTime())) { return '—'; }
         return (d.getMonth() + 1) + '/' + d.getDate();
       };
 
@@ -193,12 +279,16 @@
         $location.path('/login');
       };
 
-      // Keep the dashboard live while it is open.
+      // Safety-net refresh while the dashboard is open (live events do the
+      // real work; this only covers edge cases like clock/advice text).
       var interval = $interval($scope.refresh, 10000);
 
       $scope.$on('$destroy', function () {
         if (interval) { $interval.cancel(interval); }
+        if (unbindDb) { unbindDb(); }
+        if (unbindMenu) { unbindMenu(); }
       });
     }
   ]);
+
 })();

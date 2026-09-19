@@ -414,21 +414,28 @@
         </section>
       </div>
 
-      <!-- Food Availability -->
+      <!-- Food Availability (live stock from admin_db.menu_items) -->
       <section class="food-card admin-section">
         <div class="admin-section-head">
-          <h2 class="admin-section-title">Food availability</h2>
+          <h2 class="admin-section-title">Food availability &amp; live stock</h2>
           <span class="admin-chip">Food: {{stats.availableItems}} available / {{stats.soldOutItems}} sold out</span>
         </div>
+        <p class="admin-empty" style="margin-bottom:12px">Stock reduces automatically on every student checkout and updates here live. Use + / − to restock or tap the status pill to mark sold out / available.</p>
         <div class="food-option-grid admin-menu-grid">
           <div class="food-option-card admin-menu-card" ng-repeat="item in menu track by item.id">
             <span class="food-option-icon">{{item.emoji}}</span>
             <span class="food-option-name">{{item.name}}</span>
-            <span class="food-option-hint">&#8377;{{item.basePrice}} &middot; {{orderItemCount(item.id)}} ordered</span>
-            <span class="admin-avail" ng-class="item.available ? 'avail-yes' : 'avail-no'" >
+            <span class="food-option-hint">&#8377;{{item.basePrice}} &middot; {{orderItemCount(item.id)}} ordered &middot; <strong>{{item.stockQty}} left</strong></span>
+            <button type="button" class="admin-avail" ng-class="item.available ? 'avail-yes' : 'avail-no'" ng-click="toggleAvailability(item)" title="Tap to toggle availability">
               <span class="busyness-dot" ng-class="{'active': item.available}"></span>
               {{item.available ? 'Available' : 'Sold out'}}
-            </span>
+            </button>
+            <div class="admin-stock-row">
+              <button type="button" class="food-qty-btn" ng-click="adjustStock(item, -1)" aria-label="Decrease stock">−</button>
+              <span class="food-qty-value">{{item.stockQty}}</span>
+              <button type="button" class="food-qty-btn" ng-click="adjustStock(item, 1)" aria-label="Increase stock">+</button>
+              <button type="button" class="food-btn-ghost" ng-click="restock(item, 50)">Restock 50</button>
+            </div>
           </div>
         </div>
       </section>
@@ -2057,6 +2064,7 @@
 
   <!-- Services -->
   <script src="js/services/AuthService.js"></script>
+  <script src="js/services/DatabaseService.js"></script>
   <script src="js/services/QueueService.js"></script>
   <script src="js/services/UserService.js"></script>
   <script src="js/services/OrderService.js"></script>

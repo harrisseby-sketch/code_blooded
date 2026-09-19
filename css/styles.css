@@ -3539,6 +3539,19 @@ body {
   border: 1px solid var(--gray-200);
 }
 
+button.admin-avail {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.admin-stock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
 .admin-table-wrap {
   overflow-x: auto;
   margin-top: 4px;

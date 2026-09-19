@@ -139,6 +139,21 @@
         return FoodOrderService.getCartSummary();
       };
 
+      // Live stock: admin restock / sold-out (or another tab's checkout)
+      // refreshes the menu instantly without a page reload.
+      var unbindMenu = $scope.$on('food:menuUpdated', function () {
+        $scope.menu = FoodOrderService.getMenu();
+      });
+      var unbindDb = $scope.$on('db:changed', function (event, data) {
+        if (data && (data.table === 'menu_items' || data.table === '__remote__')) {
+          $scope.menu = FoodOrderService.getMenu();
+        }
+      });
+      $scope.$on('$destroy', function () {
+        if (unbindMenu) { unbindMenu(); }
+        if (unbindDb) { unbindDb(); }
+      });
+
       $scope.goToCart = function () {
         $location.path('/food/cart');
       };

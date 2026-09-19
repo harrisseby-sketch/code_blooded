@@ -102,6 +102,19 @@
       $scope.goBack = function () {
         $location.path('/food');
       };
+
+      // Live sync: cart edits from another tab (or admin-driven changes)
+      // refresh this view instantly.
+      var unbindCart = $scope.$on('food:cartUpdated', function () {
+        $scope.refresh();
+      });
+      var unbindDb = $scope.$on('db:changed', function () {
+        $scope.refresh();
+      });
+      $scope.$on('$destroy', function () {
+        if (unbindCart) { unbindCart(); }
+        if (unbindDb) { unbindDb(); }
+      });
     }
   ]);
 })();

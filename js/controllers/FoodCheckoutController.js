@@ -131,6 +131,24 @@
 
       // ---- Navigation ----
 
+      // Live sync: if the cart changes elsewhere before placing,
+      // re-read ALL lines so checkout never drops items.
+      function refreshLines() {
+        if ($scope.placed) { return; }
+        $scope.lines = FoodOrderService.getCartLines();
+        $scope.summary = FoodOrderService.getCartSummary();
+        if (!$scope.summary.count && !$scope.placed) {
+          QueueService.showToast('Your cart is empty. Add some food first.', 'info');
+          $location.path('/food');
+        }
+      }
+      var unbindCart = $scope.$on('food:cartUpdated', refreshLines);
+      var unbindDb = $scope.$on('db:changed', refreshLines);
+      $scope.$on('$destroy', function () {
+        if (unbindCart) { unbindCart(); }
+        if (unbindDb) { unbindDb(); }
+      });
+
       $scope.goHome = function () {
         $location.path('/home');
       };
