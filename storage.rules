@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // QueueSync print-job files.
+    // Path: photostat_jobs/{timestamp}-{nonce}-{filename}
+    //
+    // Same Auth caveat as firestore.rules: the app has no Firebase Auth yet
+    // (staff/students log in client-side), so uploads/downloads are open below
+    // to keep the demo working. When Auth is added, restrict with:
+    //   allow read, write: if request.auth != null;
+    //   allow delete      : if request.auth.token.photostatStaff == true
+    //                       || request.auth.token.admin == true;
+
+    match /photostat_jobs/{file} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if true;
+    }
+
+    match /{allPaths=**} {
+      // Everything else is disallowed until explicitly matched above.
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}

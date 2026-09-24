@@ -1,18 +1,16 @@
 /* ============================================
-   QueueSync - AdminController (live DB-backed)
+   QueueSync - AdminController (thin view layer)
    Admin dashboard: live queue occupancy, food
    stock / availability, placed food orders and
    print / photostat jobs.
 
-   LIVE UPDATES: subscribes to the virtual live DB
-   (DatabaseService) instead of polling sessionStorage:
-     - student checkout -> orders/order_items tables change
-       -> stock_qty decrements in admin_db.menu_items
-       -> this dashboard refreshes instantly (same tab via
-          $rootScope event, other tabs via storage event).
-     - admin restock / sold-out toggle -> menu_items change
-       -> student menu updates live via 'food:menuUpdated'.
-   A 10s $interval refresh is kept only as a safety net.
+   All state + actions live in AdminService; this
+   controller only:
+     - guards the /admin route to admins,
+     - binds AdminService state to the template,
+     - owns UI-only concerns (confirm dialogs,
+       double-click guards, toasts) on top of
+       AdminService.serveCurrent / openPrint.
    ============================================ */
 
 (function () {
@@ -21,14 +19,12 @@
   angular.module('queueSyncApp').controller('AdminController', [
     '$scope',
     '$location',
-    '$interval',
     '$window',
     'AuthService',
     'QueueService',
-    'FoodOrderService',
-    'DatabaseService',
+    'AdminService',
     'MultiDeviceSyncService',
-    function ($scope, $location, $interval, $window, AuthService, QueueService, FoodOrderService, DatabaseService, MultiDeviceSyncService) {
+    function ($scope, $location, $window, AuthService, QueueService, AdminService, MultiDeviceSyncService) {
 
       // Admin-only route guard
       if (!AuthService.isAdmin()) {
@@ -36,190 +32,41 @@
         return;
       }
 
+      var state = AdminService.getState();
+
+      // ---- Live state binding ----
       $scope.isLoading = false;
       $scope.refreshedAt = null;
+      $scope.nowServing = state.nowServing;
+      $scope.isActing = { canteen: false, photostat: false };
 
-      $scope.canteen = { title: 'Canteen', members: [], count: 0 };
-      $scope.photostat = { title: 'Photostat', members: [], count: 0 };
-      $scope.menu = [];
-      $scope.orders = [];
-      $scope.photostatJobs = [];
-      $scope.stats = {
-        canteenCount: 0,
-        photostatCount: 0,
-        orderCount: 0,
-        jobCount: 0,
-        studentCount: 0,
-        availableItems: 0,
-        soldOutItems: 0
-      };
-
-      /**
-       * Orders come from the shared DB (student_db.orders JOIN
-       * student_db.order_items), so EVERY student's EVERY order with ALL
-       * its items is visible — never just the current tab's last order.
-       * A legacy sessionStorage scan is kept as a fallback for orders
-       * placed before this upgrade.
-       */
-      function readAllFoodOrders() {
-        var orders = [];
-        try {
-          orders = DatabaseService.getAllOrders();
-        } catch (e) { orders = []; }
-        if (!orders.length) {
-          orders = readLegacyFoodOrders();
-        }
-        return orders;
+      function copyState() {
+        $scope.isLoading = state.isLoading;
+        $scope.refreshedAt = state.refreshedAt;
+        $scope.canteen = state.canteen;
+        $scope.photostat = state.photostat;
+        $scope.menu = state.menu;
+        $scope.orders = state.orders;
+        $scope.photostatJobs = state.photostatJobs;
+        $scope.stats = state.stats;
+        $scope.canteenLive = state.canteenLive;
+        $scope.photostatLive = state.photostatLive;
       }
 
-      function readLegacyFoodOrders() {
-        var orders = [];
-        try {
-          for (var i = 0; i < $window.sessionStorage.length; i++) {
-            var key = $window.sessionStorage.key(i);
-            if (key && key.indexOf('queueSync_foodOrder_') === 0) {
-              var sid = key.replace('queueSync_foodOrder_', '');
-              try {
-                var order = JSON.parse($window.sessionStorage.getItem(key));
-                if (order && order.orderNo) {
-                  order._studentId = order._studentId || sid;
-                  orders.push(order);
-                }
-              } catch (e) { /* skip corrupt entry */ }
-            }
-          }
-        } catch (e) { /* noop */ }
-        orders.sort(function (a, b) {
-          return new Date(b.placedAt) - new Date(a.placedAt);
-        });
-        return orders;
-      }
+      // Pure helpers / actions delegated to AdminService.
+      $scope.refresh = AdminService.refresh;
+      $scope.formatTime = AdminService.formatTime;
+      $scope.formatDate = AdminService.formatDate;
+      $scope.orderTypeLabel = AdminService.orderTypeLabel;
+      $scope.orderItemCount = AdminService.orderItemCount;
+      $scope.toggleAvailability = AdminService.toggleAvailability;
+      $scope.restock = AdminService.restock;
+      $scope.adjustStock = AdminService.adjustStock;
 
-      function readAllPhotostatJobs() {
-        var jobs = [];
-        try {
-          jobs = DatabaseService.getAllPhotostatJobs();
-        } catch (e) { jobs = []; }
-        try {
-          for (var i = 0; i < $window.sessionStorage.length; i++) {
-            var key = $window.sessionStorage.key(i);
-            if (key && key.indexOf('queueSync_photostatJob_') === 0) {
-              var sid = key.replace('queueSync_photostatJob_', '');
-              try {
-                var job = JSON.parse($window.sessionStorage.getItem(key));
-                if (job && job.orderNo) {
-                  job._studentId = sid;
-                  jobs.push(job);
-                }
-              } catch (e) { /* skip corrupt entry */ }
-            }
-          }
-        } catch (e) { /* noop */ }
-        jobs.sort(function (a, b) {
-          return new Date(b.paidAt || b.at) - new Date(a.paidAt || a.at);
-        });
-        return jobs;
-      }
-
-      /**
-       * Queue members: live in-memory list first (includes simulation),
-       * merged with the DB mirror so checkouts from other tabs appear.
-       */
-      function readQueueMembers(locationId) {
-        var seen = {};
-        var out = [];
-        try {
-          var q = QueueService.getQueue(locationId);
-          (q ? q.members : []).forEach(function (m) {
-            if (m && m.studentId && !seen[m.studentId]) {
-              seen[m.studentId] = true;
-              out.push(m);
-            }
-          });
-        } catch (e) { /* noop */ }
-        try {
-          DatabaseService.getQueueMembers(locationId).forEach(function (m) {
-            if (m && m.student_id && !seen[m.student_id] && m.student_id.indexOf('@sim-') !== 0) {
-              seen[m.student_id] = true;
-              out.push({ studentId: m.student_id, joinedAt: m.joined_at });
-            }
-          });
-        } catch (e) { /* noop */ }
-        return out;
-      }
-
-      /**
-       * Refreshes every panel on the dashboard.
-       */
-      $scope.refresh = function () {
-        $scope.isLoading = true;
-
-        $scope.canteen.members = readQueueMembers('canteen');
-        $scope.canteen.count = $scope.canteen.members.length;
-
-        $scope.photostat.members = readQueueMembers('photostat');
-        $scope.photostat.count = $scope.photostat.members.length;
-
-        $scope.menu = FoodOrderService.getMenu();
-        $scope.orders = readAllFoodOrders();
-        $scope.photostatJobs = readAllPhotostatJobs();
-
-        // Unique students seen across queues, orders and jobs.
-        var studentIds = {};
-        $scope.canteen.members.concat($scope.photostat.members).forEach(function (m) {
-          if (m.studentId) { studentIds[m.studentId] = true; }
-        });
-        $scope.orders.forEach(function (o) { if (o._studentId) { studentIds[o._studentId] = true; } });
-        $scope.photostatJobs.forEach(function (j) {
-          if (j._studentId) { studentIds[j._studentId] = true; }
-          else if (j.student_id) { studentIds[j.student_id] = true; }
-        });
-
-        var availableItems = 0;
-        var soldOutItems = 0;
-        $scope.menu.forEach(function (item) {
-          if (item.available) { availableItems++; } else { soldOutItems++; }
-        });
-
-        $scope.stats = {
-          canteenCount: $scope.canteen.count,
-          photostatCount: $scope.photostat.count,
-          orderCount: $scope.orders.length,
-          jobCount: $scope.photostatJobs.length,
-          studentCount: Object.keys(studentIds).length,
-          availableItems: availableItems,
-          soldOutItems: soldOutItems
-        };
-
-        // Live queue vibe, voted by REAL users on any device
-        // (fast / normal / slow + number of reporters).
-        $scope.canteenLive = liveVibe('canteen');
-        $scope.photostatLive = liveVibe('photostat');
-
-        $scope.refreshedAt = new Date();
-        $scope.isLoading = false;
-      };
-
-      function liveVibe(locationId) {
-        try {
-          var info = QueueService.getQueueInfo(locationId);
-          if (info && info.liveStatus) {
-            return {
-              label: info.liveStatus.label,
-              colorClass: info.liveStatus.colorClass,
-              reports: info.liveStatus.reports || 0
-            };
-          }
-        } catch (e) { /* noop */ }
-        return { label: 'Normal', colorClass: 'status-normal', reports: 0 };
-      }
-
-      $scope.refresh();
+      copyState();
+      var unbindState = AdminService.onState(copyState);
 
       // ---- Multi-device sync status (live order counts across devices) ----
-      // The "Food orders" stat above is driven by $scope.orders, which is
-      // rebuilt on every 'db:changed' event — including merges of orders
-      // placed on OTHER devices. So the count ticks up live, no refresh.
       $scope.sync = MultiDeviceSyncService.getStatus();
       $scope.retrySync = function () {
         MultiDeviceSyncService.retry();
@@ -227,101 +74,111 @@
       };
       var unbindSync = $scope.$on('sync:status', function (event, status) {
         $scope.sync = status;
-        // A fresh sync may have merged remote orders -> recount.
-        $scope.refresh();
       });
-
-      // ---- Live subscriptions: no manual refresh needed ----
-      var unbindDb = $scope.$on('db:changed', function () {
-        $scope.refresh();
-      });
-      var unbindMenu = $scope.$on('food:menuUpdated', function () {
-        $scope.refresh();
-      });
-
-      // ---- Admin stock / availability controls (live to students) ----
-      $scope.toggleAvailability = function (item) {
-        try {
-          DatabaseService.setMenuAvailability(item.id, !item.available);
-        } catch (e) { /* noop */ }
-        $scope.refresh();
-      };
-
-      $scope.restock = function (item, qty) {
-        var q = parseInt(qty, 10);
-        if (isNaN(q) || q < 0) { return; }
-        try {
-          DatabaseService.setStock(item.id, q);
-        } catch (e) { /* noop */ }
-        $scope.refresh();
-      };
-
-      $scope.adjustStock = function (item, delta) {
-        try {
-          var current = 0;
-          $scope.menu.forEach(function (m) {
-            if (m.id === item.id) { current = m.stockQty || 0; }
-          });
-          DatabaseService.setStock(item.id, Math.max(0, current + delta));
-        } catch (e) { /* noop */ }
-        $scope.refresh();
-      };
-
-      /**
-       * Total quantity ordered for a given menu item.
-       */
-      $scope.orderItemCount = function (itemId) {
-        var count = 0;
-        ($scope.orders || []).forEach(function (o) {
-          (o.items || []).forEach(function (it) {
-            if (it.itemId === itemId || it.id === itemId) { count += it.qty; }
-          });
-        });
-        return count;
-      };
-
-      $scope.orderTypeLabel = function (id) {
-        var map = { takeaway: 'Takeaway', pickup: 'Pickup', 'dine-in': 'Dine-in' };
-        return map[id] || id || '—';
-      };
-
-      /**
-       * Formats a stored timestamp for display.
-       */
-      $scope.formatTime = function (value) {
-        var d = new Date(value);
-        if (isNaN(d.getTime())) { return '—'; }
-        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-        return pad(d.getHours()) + ':' + pad(d.getMinutes());
-      };
-
-      /**
-       * Formats a stored date for display.
-       */
-      $scope.formatDate = function (value) {
-        var d = new Date(value);
-        if (isNaN(d.getTime())) { return '—'; }
-        return (d.getMonth() + 1) + '/' + d.getDate();
-      };
 
       /**
        * Admin logout - clears both the admin and any leftover student session
        * so the logout always returns to the clean login page.
        */
       $scope.logoutAdmin = function () {
-        AuthService.logout();
-        AuthService.adminLogout();
+        AdminService.adminLogout();
         $location.path('/login');
       };
 
-      // Safety-net refresh while the dashboard is open (live events do the
-      // real work; this only covers edge cases like clock/advice text).
-      var interval = $interval($scope.refresh, 10000);
+      // ==========================================================
+      //            NOW SERVING - ADMIN ACTIONS
+      // ==========================================================
+
+      /**
+       * Canteen: single "Mark as Served" action. Confirms, then serves the
+       * current request via AdminService.serveCurrent, which atomically
+       * archives + deletes the member doc in Firestore (or pops it locally
+       * in demo mode). The next entry becomes "Now Serving" automatically.
+       */
+      $scope.serveCanteen = function () {
+        if ($scope.isActing.canteen) { return; }
+        var ns = $scope.nowServing.canteen;
+        if (!ns) {
+          QueueService.showToast('No pending request in the canteen queue.', 'info');
+          return;
+        }
+        if (!$window.confirm('Mark student ' + ns.studentId + ' as served?\nThey will be called to the counter and removed from the queue.')) {
+          return;
+        }
+        $scope.isActing.canteen = true;
+        AdminService.serveCurrent('canteen')
+          .then(function (res) {
+            if (!res) {
+              QueueService.showToast('That request was already served — queue advanced.', 'info');
+              return;
+            }
+            QueueService.showToast('Served ' + res.studentId + '. The next request is now current.', 'success');
+          })
+          .catch(function (err) {
+            console.error('[QueueSync] Canteen serve failed:', err);
+            QueueService.showToast('Could not serve the request — check the console.', 'warning');
+          })
+          .finally(function () {
+            $scope.isActing.canteen = false;
+            AdminService.refresh();
+          });
+      };
+
+      /**
+       * Photostat: "Serve / Done". Confirms, then AdminService.serveCurrent
+       * optionally deletes any uploaded file from Firebase Storage first
+       * (best-effort), then serves + deletes the queue entry. Printing alone
+       * (printPhotostat) never deletes the entry.
+       */
+      $scope.servePhotostat = function () {
+        if ($scope.isActing.photostat) { return; }
+        var ns = $scope.nowServing.photostat;
+        if (!ns) {
+          QueueService.showToast('No pending request in the photostat queue.', 'info');
+          return;
+        }
+        var job = ns.request || {};
+        if (!$window.confirm('Finish job ' + (job.orderNo || ns.studentId) + ' and mark as DONE?\nThe queue entry will be removed.')) {
+          return;
+        }
+
+        $scope.isActing.photostat = true;
+        AdminService.serveCurrent('photostat')
+          .then(function (res) {
+            if (!res) {
+              QueueService.showToast('That job was already completed — queue advanced.', 'info');
+              return;
+            }
+            QueueService.showToast('Job ' + (job.orderNo || res.studentId) + ' done. The next job is now current.', 'success');
+          })
+          .catch(function (err) {
+            console.error('[QueueSync] Photostat serve failed:', err);
+            QueueService.showToast('Could not complete the job — check the console.', 'warning');
+          })
+          .finally(function () {
+            $scope.isActing.photostat = false;
+            AdminService.refresh();
+          });
+      };
+
+      /**
+       * Photostat: "Print". Opens a print-ready layout for the current job in
+       * a new tab and triggers window.print(). Printing alone does NOT delete
+       * the queue entry — that only happens via servePhotostat().
+       */
+      $scope.printPhotostat = function () {
+        if (!state.nowServing.photostat) {
+          QueueService.showToast('No pending request to print.', 'info');
+          return;
+        }
+        var opened = AdminService.openPrint();
+        if (!opened) {
+          QueueService.showToast('Popup blocked — allow popups to print jobs.', 'warning');
+        }
+      };
 
       $scope.$on('$destroy', function () {
-        if (interval) { $interval.cancel(interval); }
-        if (unbindDb) { unbindDb(); }
-        if (unbindMenu) { unbindMenu(); }
+        if (unbindState) { unbindState(); }
         if (unbindSync) { unbindSync(); }
       });
     }

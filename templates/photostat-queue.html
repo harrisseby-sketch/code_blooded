@@ -233,6 +233,51 @@
               <span class="error-message" ng-show="photostatError === 'Enter a valid number of pages.'">{{photostatError}}</span>
             </div>
 
+            <!-- Copies / colour / sides -->
+            <div class="form-group">
+              <label for="photostatCopies" class="form-label">Number of copies</label>
+              <input
+                type="number"
+                id="photostatCopies"
+                class="form-input"
+                min="1"
+                max="100"
+                ng-model="jobCopies"
+                placeholder="e.g. 1"
+              >
+              <span class="error-message" ng-show="jobCopies < 1">At least one copy.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Ink</label>
+              <div class="food-chip-group">
+                <button
+                  type="button"
+                  class="food-chip"
+                  ng-repeat="opt in jobColors track by opt.id"
+                  ng-class="{'active': jobColor === opt.id}"
+                  ng-click="jobColor = opt.id"
+                >
+                  {{opt.label}}
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Print sides</label>
+              <div class="food-chip-group">
+                <button
+                  type="button"
+                  class="food-chip"
+                  ng-repeat="opt in jobSidesOptions track by opt.id"
+                  ng-class="{'active': jobSides === opt.id}"
+                  ng-click="jobSides = opt.id"
+                >
+                  {{opt.label}}
+                </button>
+              </div>
+            </div>
+
             <!-- File upload (Print jobs only) -->
             <div class="form-group" ng-if="photostatService.id === 'print'">
               <label for="photostatFiles" class="form-label">
@@ -257,7 +302,7 @@
             <!-- Cost breakdown -->
             <div class="photostat-cost-box">
               <div class="food-summary-row">
-                <span>{{photostatService.label}} &times; {{jobPages || 0}}</span>
+                <span>{{photostatService.label}} &times; {{jobPages || 0}}pg &times; {{jobCopies || 1}} copy{{(jobCopies || 1) === 1 ? '' : 's'}} &middot; {{jobColor === 'color' ? 'Colour' : 'B/W'}}</span>
                 <span>&#8377;{{photostatCost()}}</span>
               </div>
               <div class="food-summary-row food-summary-total">
@@ -319,6 +364,9 @@
             <div class="photostat-confirm-box">
               <div class="food-summary-row"><span>Service</span><strong>{{confirmedJob().serviceLabel}}</strong></div>
               <div class="food-summary-row"><span>Pages</span><strong>{{confirmedJob().pages}}</strong></div>
+              <div class="food-summary-row" ng-if="confirmedJob().copies"><span>Copies</span><strong>{{confirmedJob().copies}}</strong></div>
+              <div class="food-summary-row"><span>Ink</span><strong>{{confirmedJob().color === 'color' ? 'Colour' : (confirmedJob().color === 'bw' ? 'B/W' : '—')}}</strong></div>
+              <div class="food-summary-row"><span>Sides</span><strong>{{confirmedJob().sides === 'double' ? 'Double-sided' : (confirmedJob().sides === 'single' ? 'Single-sided' : '—')}}</strong></div>
               <div class="food-summary-row" ng-if="confirmedJob().serviceId === 'print'"><span>Files</span><strong>{{confirmedJob().files.length}} uploaded</strong></div>
               <div class="food-summary-row"><span>Amount paid</span><strong>&#8377;{{confirmedJob().amount}}</strong></div>
               <div class="food-summary-row"><span>Paid via</span><strong>{{confirmedJob().paymentLabel}}</strong></div>

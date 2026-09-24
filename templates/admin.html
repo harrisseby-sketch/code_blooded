@@ -28,6 +28,129 @@
         </button>
       </header>
 
+      <!-- Now Serving: the FIRST request in each queue, updated live from
+           Firestore onSnapshot (via QueueService -> 'db:changed'). -->
+      <div class="now-serving-grid">
+
+        <!-- ============ CANTEEN NOW SERVING ============ -->
+        <section class="food-card admin-section now-serving-card ns-canteen"
+                 ng-class="{'ns-empty-card': !nowServing.canteen}">
+          <div class="admin-section-head">
+            <h2 class="admin-section-title">
+              <span class="ns-live-dot" ng-class="{'active': nowServing.canteen}"></span>
+              Now Serving &middot; Canteen
+              <span class="admin-chip" ng-if="stats.canteenCount > 0">{{stats.canteenCount}} waiting</span>
+            </h2>
+          </div>
+
+          <div class="ns-body" ng-if="nowServing.canteen">
+            <div class="ns-hero">
+              <span class="ns-token">#1</span>
+              <div class="ns-hero-info">
+                <strong class="ns-student">{{nowServing.canteen.studentId}}</strong>
+                <span class="ns-meta">In queue since {{formatTime(nowServing.canteen.joinedAt)}} &middot; called to Counter 1</span>
+              </div>
+            </div>
+
+            <div class="ns-order" ng-if="nowServing.canteen.order">
+              <div class="ns-order-title">Order {{nowServing.canteen.order.orderNo}}</div>
+              <ul class="ns-order-items">
+                <li ng-repeat="it in nowServing.canteen.order.items">
+                  {{it.emoji}} {{it.name}} <strong>&times;{{it.qty}}</strong>
+                </li>
+              </ul>
+              <div class="ns-order-total">Total &#8377;{{nowServing.canteen.order.total}}</div>
+            </div>
+            <p class="ns-note" ng-if="!nowServing.canteen.order">
+              Waiting to place their order at the counter.
+            </p>
+
+            <div class="ns-actions">
+              <button type="button" class="btn-action btn-serve btn-serve-canteen"
+                      ng-click="serveCanteen()"
+                      ng-disabled="isActing.canteen"
+                      ng-class="{'btn-disabled': isActing.canteen}">
+                <span class="btn-spinner" ng-show="isActing.canteen"><span class="spinner"></span> Serving...</span>
+                <span class="btn-content" ng-hide="isActing.canteen">Mark as Served</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="ns-empty" ng-if="!nowServing.canteen">
+            <p>No pending requests</p>
+            <span>Students who join the canteen queue appear here first, live.</span>
+            <button type="button" class="btn-action btn-serve btn-disabled" disabled aria-disabled="true">
+              Mark as Served
+            </button>
+          </div>
+        </section>
+
+        <!-- ============ PHOTOSTAT NOW SERVING ============ -->
+        <section class="food-card admin-section now-serving-card ns-photostat"
+                 ng-class="{'ns-empty-card': !nowServing.photostat}">
+          <div class="admin-section-head">
+            <h2 class="admin-section-title">
+              <span class="ns-live-dot" ng-class="{'active': nowServing.photostat}"></span>
+              Now Serving &middot; Photostat
+              <span class="admin-chip" ng-if="stats.photostatCount > 0">{{stats.photostatCount}} waiting</span>
+            </h2>
+          </div>
+
+          <div class="ns-body" ng-if="nowServing.photostat">
+            <div class="ns-hero">
+              <span class="ns-token">#1</span>
+              <div class="ns-hero-info">
+                <strong class="ns-student">{{nowServing.photostat.studentId}}</strong>
+                <span class="ns-meta">
+                  {{nowServing.photostat.request.serviceLabel || 'Print / Photostat'}}
+                  &middot; job {{nowServing.photostat.request.orderNo || '—'}}
+                </span>
+              </div>
+            </div>
+
+            <div class="ns-job-details" ng-if="nowServing.photostat.hasRequest">
+              <div class="ns-job-row"><span>Pages</span><strong>{{nowServing.photostat.request.pages || '—'}}</strong></div>
+              <div class="ns-job-row"><span>Copies</span><strong>{{nowServing.photostat.request.copies || 1}}</strong></div>
+              <div class="ns-job-row"><span>Ink</span><strong>{{nowServing.photostat.request.color === 'color' ? 'Colour' : 'B/W'}}</strong></div>
+              <div class="ns-job-row"><span>Sides</span><strong>{{nowServing.photostat.request.sides === 'double' ? 'Double-sided' : 'Single-sided'}}</strong></div>
+              <div class="ns-job-row"><span>Amount</span><strong>&#8377;{{nowServing.photostat.request.amount || '—'}} <em>({{nowServing.photostat.request.paymentLabel || 'paid'}})</em></strong></div>
+              <div class="ns-job-row" ng-if="nowServing.photostat.request.files && nowServing.photostat.request.files.length">
+                <span>Files</span>
+                <strong class="ns-file-list">
+                  <span class="ns-file-chip" ng-repeat="f in nowServing.photostat.request.files track by f.name">
+                    &#128206; {{f.name}}
+                    <a ng-if="f.previewUrl || f.url" ng-href="{{f.previewUrl || f.url}}" target="_blank" rel="noopener" title="Open file">open</a>
+                  </span>
+                </strong>
+              </div>
+            </div>
+
+            <div class="ns-actions ns-actions-2">
+              <button type="button" class="btn-action btn-print"
+                      ng-click="printPhotostat()"
+                      ng-disabled="isActing.photostat">
+                Print
+              </button>
+              <button type="button" class="btn-action btn-serve btn-serve-photostat"
+                      ng-click="servePhotostat()"
+                      ng-disabled="isActing.photostat"
+                      ng-class="{'btn-disabled': isActing.photostat}">
+                <span class="btn-spinner" ng-show="isActing.photostat"><span class="spinner"></span> Working...</span>
+                <span class="btn-content" ng-hide="isActing.photostat">Serve / Done</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="ns-empty" ng-if="!nowServing.photostat">
+            <p>No pending requests</p>
+            <span>Paid print / photostat jobs appear here first, live.</span>
+            <button type="button" class="btn-action btn-serve btn-disabled" disabled aria-disabled="true">
+              Print &middot; Serve / Done
+            </button>
+          </div>
+        </section>
+      </div>
+
       <!-- Multi-device sync status: the Food orders count below ticks up
            live whenever ANY linked device checks out. -->
       <section class="food-card admin-section admin-sync-section">

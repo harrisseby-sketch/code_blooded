@@ -31,24 +31,25 @@
       $scope.errors = {};
       $scope.joinedPosition = null;
 
-      // Restore a recently placed order so the confirmation survives refresh.
-      $scope.order = FoodOrderService.getLastOrder();
-      $scope.placed = !!$scope.order;
+      var lastOrder = FoodOrderService.getLastOrder();
+      var cartCount = FoodOrderService.getCartSummary().count;
+      $scope.order = null;
+      $scope.placed = false;
+      $scope.lines = [];
+      $scope.summary = {
+        count: 0, lineCount: 0, subtotal: 0, tax: 0, taxLabel: '', total: 0
+      };
 
-      if (!FoodOrderService.getCartSummary().count) {
-        if (!$scope.placed) {
-          QueueService.showToast('Your cart is empty. Add some food first.', 'info');
-          $location.path('/food');
-          return;
-        }
-        // Confirmation view with an empty cart needs no live lines.
-        $scope.lines = [];
-        $scope.summary = {
-          count: 0, lineCount: 0, subtotal: 0, tax: 0, taxLabel: '', total: 0
-        };
-      } else {
+      if (cartCount > 0) {
         $scope.lines = FoodOrderService.getCartLines();
         $scope.summary = FoodOrderService.getCartSummary();
+      } else if (lastOrder) {
+        $scope.order = lastOrder;
+        $scope.placed = true;
+      } else {
+        QueueService.showToast('Your cart is empty. Add some food first.', 'info');
+        $location.path('/food');
+        return;
       }
 
       // ---- Checkout form model ----
