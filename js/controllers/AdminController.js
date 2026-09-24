@@ -91,9 +91,9 @@
 
       /**
        * Canteen: single "Mark as Served" action. Confirms, then serves the
-       * current request via AdminService.serveCurrent, which atomically
-       * archives + deletes the member doc in Firestore (or pops it locally
-       * in demo mode). The next entry becomes "Now Serving" automatically.
+       * current request via AdminService.serveCurrent, which pops the front
+       * entry from the local queue. The next entry becomes "Now Serving"
+       * automatically.
        */
       $scope.serveCanteen = function () {
         if ($scope.isActing.canteen) { return; }

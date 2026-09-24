@@ -16,11 +16,9 @@
     '$interval',
     '$timeout',
     '$window',
-    '$q',
     'AuthService',
     'QueueService',
-    'FirestoreService',
-    function ($scope, $location, $interval, $timeout, $window, $q, AuthService, QueueService, FirestoreService) {
+    function ($scope, $location, $interval, $timeout, $window, AuthService, QueueService) {
 
       // Ensure user is authenticated
       if (!AuthService.isLoggedIn()) {
@@ -148,8 +146,8 @@
       };
 
       $scope.onFilesSelected = function (files) {
-        // Keep the raw File objects (they carry name/size AND the bytes needed
-        // for the Firebase Storage upload below).
+        // Keep the raw File objects so their name/size can be recorded on the
+        // job payload shown to the admin at the counter.
         $scope.uploadedFiles = Array.prototype.slice.call(files || []);
         $scope.photostatError = '';
         if (!$scope.$$phase) {
@@ -200,60 +198,50 @@
         if (!copies || copies < 1) { copies = 1; }
         var amount = pages * copies * svc.pricePerPage;
         var paymentLabel = 'Online (' + ($scope.jobPaymentOnline === 'card' ? 'Card' : 'UPI') + ')';
+        var files = $scope.uploadedFiles && $scope.uploadedFiles.length
+          ? $scope.uploadedFiles.map(function (f) { return { name: f.name, size: f.size }; })
+          : [];
 
-        // Upload print files to Firebase Storage first (best-effort). When
-        // Storage is unavailable the upload resolves [] and we fall back to
-        // recording the file name/size only, exactly as before.
-        var uploadPromise = svc.id === 'print' && $scope.uploadedFiles && $scope.uploadedFiles.length
-          ? FirestoreService.uploadFiles($scope.uploadedFiles)
-          : $q.resolve([]);
+        // Simulate a short payment-processing delay before auto-joining.
+        $timeout(function () {
+          $scope.job = {
+            serviceId: svc.id,
+            serviceLabel: svc.label,
+            pages: pages,
+            copies: copies,
+            color: $scope.jobColor,
+            sides: $scope.jobSides,
+            files: files,
+            amount: amount,
+            paymentMethod: $scope.jobPayment,
+            paymentLabel: paymentLabel,
+            orderNo: 'PS-' + Math.floor(10000 + Math.random() * 90000),
+            paidAt: new Date()
+          };
+          persistPhotostatJob();
 
-        uploadPromise.then(function (uploaded) {
-          var files = uploaded && uploaded.length
-            ? uploaded
-            : $scope.uploadedFiles.map(function (f) { return { name: f.name, size: f.size }; });
-
-          // Simulate a short payment-processing delay before auto-joining.
-          $timeout(function () {
-            $scope.job = {
-              serviceId: svc.id,
-              serviceLabel: svc.label,
-              pages: pages,
-              copies: copies,
-              color: $scope.jobColor,
-              sides: $scope.jobSides,
-              files: files,
-              amount: amount,
-              paymentMethod: $scope.jobPayment,
-              paymentLabel: paymentLabel,
-              orderNo: 'PS-' + Math.floor(10000 + Math.random() * 90000),
-              paidAt: new Date()
-            };
-            persistPhotostatJob();
-
-            QueueService.joinQueue('photostat', $scope.studentId)
-              .then(function () {
-                // Attach the job payload to the request doc so the admin
-                // "Now Serving" card shows file name, copies, B/W|Colour and
-                // single/double-side live across every device.
-                return QueueService.setRequestPayload('photostat', $scope.job);
-              })
-              .then(function () {
-                refresh();
-                QueueService.showToast(
-                  'Payment done \u2014 ' + $scope.job.serviceLabel + ' Job ' + $scope.job.orderNo + ' placed. You joined the queue!',
-                  'success'
-                );
-              })
-              .catch(function (err) {
-                console.error('Auto-join failed:', err);
-                QueueService.showToast('Payment done, but we could not join the queue. Please try again.', 'warning');
-              })
-              .finally(function () {
-                $scope.isPaying = false;
-              });
-          }, 900);
-        });
+          QueueService.joinQueue('photostat', $scope.studentId)
+            .then(function () {
+              // Attach the job payload to the queue entry so the admin
+              // "Now Serving" card shows file name, copies, B/W|Colour and
+              // single/double-side live.
+              return QueueService.setRequestPayload('photostat', $scope.job);
+            })
+            .then(function () {
+              refresh();
+              QueueService.showToast(
+                'Payment done \u2014 ' + $scope.job.serviceLabel + ' Job ' + $scope.job.orderNo + ' placed. You joined the queue!',
+                'success'
+              );
+            })
+            .catch(function (err) {
+              console.error('Auto-join failed:', err);
+              QueueService.showToast('Payment done, but we could not join the queue. Please try again.', 'warning');
+            })
+            .finally(function () {
+              $scope.isPaying = false;
+            });
+        }, 900);
       };
 
       $scope.confirmedJob = function () {

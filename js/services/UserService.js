@@ -5,8 +5,7 @@
 
    Currently backed by sessionStorage so the demo
    works fully offline. Structured so the history
-   can move to Firebase later, e.g.:
-     users/{studentId}/history  (Firestore sub-collection)
+   can move to a shared store later.
    Each history entry adheres to the shared shape:
    {
      locationId: 'canteen' | 'photostat',
@@ -45,8 +44,6 @@
 
       /**
        * Lazily loads the history cache for the current student.
-       * TODO(Firebase): replaced by onSnapshot on
-       *   query(collection(db,'users',studentId,'history'), orderBy('joinedAt','desc'))
        */
       function ensureCacheLoaded() {
         var sid = getStudentId();

@@ -336,8 +336,8 @@
         </button>
       </header>
 
-      <!-- Now Serving: the FIRST request in each queue, updated live from
-           Firestore onSnapshot (via QueueService -> 'db:changed'). -->
+      <!-- Now Serving: the FIRST request in each queue, updated live via
+           QueueService ('db:changed'). -->
       <div class="now-serving-grid">
 
         <!-- ============ CANTEEN NOW SERVING ============ -->
@@ -2212,14 +2212,6 @@
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular-route.min.js"></script>
 
-  <!-- Firebase (compat) SDKs + QueueSync init.
-       Loaded BEFORE app.js so window.QueueSyncFirebase exists at bootstrap.
-       If these fail to load/connect, firebase-config.js flips to demo mode. -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-  <script src="js/firebase-config.js"></script>
-
   <!-- Optional multi-device config (ignored if absent -> local demo mode) -->
   <script src="js/supabase-config.js"></script>
 
@@ -2228,7 +2220,6 @@
 
   <!-- Services -->
   <script src="js/services/AuthService.js"></script>
-  <script src="js/services/FirestoreService.js"></script>
   <script src="js/services/DatabaseService.js"></script>
   <script src="js/services/MultiDeviceSyncService.js"></script>
   <script src="js/services/QueueService.js"></script>

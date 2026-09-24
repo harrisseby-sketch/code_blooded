@@ -28,8 +28,7 @@
     'QueueService',
     'FoodOrderService',
     'DatabaseService',
-    'FirestoreService',
-    function ($rootScope, $window, $interval, $q, AuthService, QueueService, FoodOrderService, DatabaseService, FirestoreService) {
+    function ($rootScope, $window, $interval, $q, AuthService, QueueService, FoodOrderService, DatabaseService) {
 
       /**
        * Live dashboard state. Mutated only by refresh(); every mutation is
@@ -347,7 +346,6 @@
 
       /**
        * Serves the current request in `locationId`.
-       * Photostat jobs clean up any stored file first (best-effort).
        * @returns {Promise<{studentId:string, request:Object|null}|null>}
        *   null means the queue was already emptied (raced serve).
        */
@@ -356,27 +354,7 @@
         if (!ns) {
           return $q.reject({ code: 'EMPTY', message: 'No pending request.' });
         }
-
-        var fileUrls = [];
-        var job = ns.request || {};
-        if (locationId === 'photostat' && job.files && job.files.length) {
-          // `url` is the gs:// bucket path (uploaded via FirestoreService.uploadFiles);
-          // fall back to any legacy https/gs link stored on the file.
-          job.files.forEach(function (f) {
-            if (f && (f.storageUrl || f.url)) { fileUrls.push(f.storageUrl || f.url); }
-          });
-        }
-
-        var storageCleanup = fileUrls.length
-          ? $q.all(fileUrls.map(function (url) {
-              return FirestoreService.deleteStorageFile(url).catch(function () { return null; });
-            })).then(function () { return true; })
-          : $q.resolve(true);
-
-        return storageCleanup
-          .then(function () {
-            return QueueService.completeCurrent(locationId);
-          });
+        return QueueService.completeCurrent(locationId);
       }
 
       /**

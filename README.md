@@ -5,59 +5,48 @@ A real-time queue tracker that shows live wait times so students never stand in 
 
 Staff log in with the admin code (ADMIN@2026) on the login page and open Admin Dashboard. Two
 **Now Serving** cards at the top show the FIRST request in each queue (FIFO by `joinedAt`).
-The cards update live via Firestore `onSnapshot` - no page refresh; positions and wait times on
-student pages recalculate instantly because they read the same live member list.
+The cards update live via local broadcasts (`QueueService` -> `db:changed`) - no page refresh;
+positions and wait times on student pages recalculate instantly because they read the same live
+member list.
 
 ### Actions
-- Canteen - **Mark as Served**: quick confirm, then atomically archives + deletes the member doc.
+- Canteen - **Mark as Served**: quick confirm, then pops the current request off the queue.
   The student's device immediately shows the "reached the counter" flow (they then order at Counter 1).
   The next member becomes "Now Serving".
 - Photostat - **Print**: opens a print-ready layout for the current job in a new tab and calls
   `window.print()`. Printing alone never deletes the request.
-- Photostat - **Serve / Done**: confirms the job is finished, optionally deletes any uploaded file
-  from Firebase Storage first (when `request.files[].url` is a `gs://` URL), then archives + deletes
-  the member doc. The next job becomes current.
+- Photostat - **Serve / Done**: confirms the job is finished and pops the queue entry. The next job
+  becomes current.
 
-Both button sets disable while an action runs (prevents double-serve / duplicate deletes), show
-success/error toasts, catch + log Firestore errors, and handle the already-served case gracefully
-(info toast, queue advances).
+Both button sets disable while an action runs (prevents double-serve), show success/error toasts,
+catch errors, and handle the already-served case gracefully (info toast, queue advances).
 
-## Collections / fields assumed
+## Local data model
+
+The app runs fully locally (sessionStorage-backed demo store managed by `DatabaseService`):
 
 ```
-queues/{locationId}                        { count, updatedAt }              locationId: 'canteen' | 'photostat'
-queues/{locationId}/members/{studentId}    { joinedAt, updatedAt, request }
-    request (photostat):                   { orderNo, serviceId, serviceLabel, pages, copies,
-                                             color: 'bw'|'color', sides: 'single'|'double',
-                                             files: [{ name, size, url? }], amount,
-                                             paymentLabel, paidAt }
-queues/{locationId}/history/{studentId}    { studentId, joinedAt, request, status: 'Served', servedAt }
-                                           (written atomically by the serve transaction; use for stats)
-queues/{locationId}/feedback/{studentId}   { status: 'fast'|'normal'|'slow', at }
+orders          { id, student_id, subtotal, tax, total, order_type, payment_detail, status, placed_at }
+order_items     { id, order_id, item_id, name, emoji, spec, qty, unit_price, addon_total, line_total }
+menu_items      { id, category, name, emoji, price, options, stock_qty, available }
+cart_lines      { id, cart_id, item_id, config, qty }
+queue_members   { id, queue_id, student_id }        (mirror for admin)
+feedback        { id, queue_id, student_id, status: 'fast'|'normal'|'slow', at }
 ```
 
-- A queue request = ONE member document. "Now Serving" = `members` query 1 ordered by `joinedAt`.
-- Canteen order items are NOT stored in the member doc: in this app students place food orders AT the
-  counter AFTER being served (existing flow). The canteen card therefore shows the student's most
+- A queue request = ONE entry in the in-memory FIFO list (mirrored to `queue_members`).
+  "Now Serving" = `members[0]` ordered by `joinedAt`.
+- Canteen order items are NOT embedded in the member entry: in this app students place food orders AT
+  the counter AFTER being served (existing flow). The canteen card therefore shows the student's most
   recent order pulled from the orders store when available, and "Waiting to place their order" before
-  that. If you want orders embedded in the request doc, also write the payload into
-  `members/{studentId}.request` from the order flow (OrderService / FoodCheckoutController).
-- Files are captured as metadata (name/size) and stored in `request.files`. No upload to Firebase
-  Storage yet, so `files[].url` is optional; `Serve / Done` only calls `deleteStorageFile` for a `gs://`
-  URL. To enable real document streaming/print + cleanup, upload in
-  `PhotostatQueueController.onFilesSelected` and set `f.url`.
+  that.
+- Photostat file uploads are captured as metadata (name/size) on the job payload shown to the admin.
+  Actual file streaming/print requires a future upload backend; until then the print view shows the
+  job summary plus file names.
 
 ## Role gating
-The app signs staff in with a client-side code (AuthService.ADMIN_CODE), so there is no Firebase Auth
-session yet. `AdminController` gates the whole dashboard + actions on `isAdmin()`, and Firestore rules
-are permissive at member level. Once Firebase Auth is added, tighten the delete/write rules in
-`firestore.rules` with an admin token/claim.
-
-## Firestore setup
-1. Project config lives in `js/firebase-config.js` (project `dbque-c1d95`). If the Firebase SDK or the
-   network is unavailable the app automatically falls back to local demo mode.
-2. Publish `firestore.rules` to the project.
-3. No composite index needed - `orderBy('joinedAt')` is a single-field order on the members subcollection.
+Staff sign in with a client-side code (`AuthService.ADMIN_CODE`). `AdminController` gates the whole
+dashboard + actions on `isAdmin()`.
 
 ## Test it (3 dummy requests, serve one by one)
 1. Open two tabs/windows (Tab A = student, Tab B = staff), or two devices on the same network.

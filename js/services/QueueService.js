@@ -5,16 +5,10 @@
    live status reports, dynamic positions, the current
    live queue data and the simulated service loop.
 
-   Two execution modes:
-     CLOUD (Firestore) - the app subscribes to the live
-       `queues/{locationId}/members` collection via
-       onSnapshot. Joins / leaves / serves / payloads are
-       written through FirestoreService transactions, and
-       every connected device (students + admin) updates
-       in real time through the snapshots.
-     DEMO - fully in-memory (as before); a $timeout service
-       loop pops the front member locally. Used when the
-       Firebase SDK/config is unavailable.
+   Fully local/in-memory (demo mode): the $timeout
+   service loop pops the front member locally and the
+   queue is mirrored into the local DB for the admin
+   dashboard.
    ============================================ */
 
 (function () {
@@ -28,8 +22,7 @@
     'AuthService',
     'UserService',
     'DatabaseService',
-    'FirestoreService',
-    function ($q, $timeout, $rootScope, $window, AuthService, UserService, DatabaseService, FirestoreService) {
+    function ($q, $timeout, $rootScope, $window, AuthService, UserService, DatabaseService) {
 
       // ============================================
       //        CONFIGURATION (per location)
@@ -69,11 +62,9 @@
       };
 
       // ============================================
-      //          IN-MEMORY QUEUE STORE (mirror)
+      //          IN-MEMORY QUEUE STORE
       // ============================================
-      // In cloud mode this is the LIVE mirror of the Firestore members
-      // collection (updated by onSnapshot). In demo mode it is the source
-      // of truth. `members` is an ordered FIFO list (oldest first).
+      // Source of truth. `members` is an ordered FIFO list (oldest first).
       var queues = {
         canteen: {
           id: 'canteen',
@@ -131,32 +122,8 @@
         shownAt: null
       };
 
-      // ============================================
-      //          CLOUD MODE STATE
-      // ============================================
-      var cloudBootstrapped = false;
-      var cloudSeedPromise = null;
-      var cloudUnsubscribers = {};
-      // While true, the user optimistically "joined" but the live snapshot
-      // has not confirmed their member doc yet, so absence must NOT be read
-      // as "served".
-      var pendingJoin = { canteen: false, photostat: false };
-
-      function cloudEligible() {
-        return !!(
-          window.QueueSyncFirebase &&
-          window.QueueSyncFirebase.mode === 'cloud' &&
-          FirestoreService &&
-          FirestoreService.isEnabled()
-        );
-      }
-
-      function isCloud() {
-        return cloudBootstrapped && cloudEligible();
-      }
-
       function getSyncMode() {
-        return isCloud() ? 'cloud' : 'demo';
+        return 'demo';
       }
 
       // ============================================
@@ -352,121 +319,6 @@
         });
       }
 
-      function initQueues() {
-        if (cloudEligible()) {
-          seedAndBindCloud();
-          return;
-        }
-        demoInitQueues();
-      }
-
-      function seedAndBindCloud() {
-        cloudSeedPromise = FirestoreService.seedIfNeeded()
-          .then(function () {
-            cloudBootstrapped = true;
-            Object.keys(queues).forEach(bindCloudListeners);
-          })
-          .catch(function (err) {
-            console.warn('QueueSync: Firestore unavailable — switching to local demo mode.', err);
-            demoInitQueues();
-            restoreMembershipDemoPush(currentStudentId());
-          });
-        return cloudSeedPromise;
-      }
-
-      function bindCloudListeners(locationId) {
-        var unsubs = {};
-        unsubs.members = FirestoreService.subscribeQueue(locationId, function (rows) {
-          onQueueSnapshot(locationId, rows);
-        });
-        unsubs.feedback = FirestoreService.subscribeFeedback(locationId, function (rows) {
-          onFeedbackSnapshot(locationId, rows);
-        });
-        cloudUnsubscribers[locationId] = unsubs;
-      }
-
-      /**
-       * Real-time member snapshot handler: replaces the local mirror,
-       * reconciles this device's membership and broadcasts so every view
-       * (student queue pages, home cards, admin now-serving panels) updates.
-       */
-      function onQueueSnapshot(locationId, rows) {
-        var queue = getQueue(locationId);
-        if (!queue) {
-          return;
-        }
-        queue.members = rows || [];
-        queue.seeded = true;
-        reconcileCloudMembership(locationId);
-        broadcastQueueUpdated(locationId, null);
-      }
-
-      /**
-       * Real-time feedback snapshot handler.
-       */
-      function onFeedbackSnapshot(locationId, rows) {
-        var queue = getQueue(locationId);
-        if (!queue) {
-          return;
-        }
-        queue.liveStatusReports = rows || [];
-        var aggregate = getLiveStatus(locationId);
-        $rootScope.$broadcast('queue:liveStatus', {
-          locationId: locationId,
-          liveStatus: aggregate
-        });
-      }
-
-      /**
-       * Keeps THIS device's join/leave/serve state in sync with the
-       * authoritative Firestore members list:
-       *   - present + joined          -> refresh position/wait,
-       *   - present + not joined      -> adopt the membership (other device),
-       *   - absent + joined + not pending -> I was served/removed -> served flow.
-       */
-      function reconcileCloudMembership(locationId) {
-        var queue = getQueue(locationId);
-        var status = userQueueStatus[locationId];
-        var sid = currentStudentId();
-        if (!queue || !status || !sid) {
-          return;
-        }
-
-        var mine = null;
-        for (var i = 0; i < queue.members.length; i++) {
-          if (queue.members[i].studentId === sid) {
-            mine = queue.members[i];
-            break;
-          }
-        }
-
-        if (mine) {
-          pendingJoin[locationId] = false;
-          if (status.joined) {
-            if (mine.joinedAt) { status.joinedAt = mine.joinedAt; }
-            recomputeUserPosition(locationId, false);
-          } else {
-            // Membership exists in the cloud but not on this device:
-            // adopt it (joined from another device / restored session).
-            status.joined = true;
-            status.served = false;
-            status.nextNotified = false;
-            status.joinedAt = mine.joinedAt || new Date();
-            status.joinPosition = null;
-            recomputeUserPosition(locationId, true);
-            persistMembership();
-            showToast('You are still in the ' + queue.title + ' queue. Spot #' + status.position + '.', 'info');
-          }
-          return;
-        }
-
-        // Not in the member list. If we believed we were queued and the
-        // snapshot (not an optimistic join) says otherwise -> served flow.
-        if (status.joined && !pendingJoin[locationId]) {
-          recomputeUserPosition(locationId, false);
-        }
-      }
-
       function broadcastQueueUpdated(locationId, servedMember) {
         $rootScope.$broadcast('queue:updated', {
           locationId: locationId,
@@ -491,41 +343,11 @@
       }
 
       /**
-       * Restores the current user's membership from sessionStorage.
-       * Cloud: flags only — presence/position come from the live snapshot.
-       * Demo: re-appends to the in-memory FIFO list.
+       * Restores the current user's membership from sessionStorage,
+       * re-appending to the in-memory FIFO list.
        */
       function restoreMembership() {
         var sid = currentStudentId();
-        if (!sid) {
-          return;
-        }
-        if (cloudEligible()) {
-          restoreMembershipCloudFlags(sid);
-          return;
-        }
-        restoreMembershipDemoPush(sid);
-      }
-
-      function restoreMembershipCloudFlags(sid) {
-        var stored = readStoredMembership(sid);
-        if (!stored) {
-          return;
-        }
-        stored.queues.forEach(function (entry) {
-          var status = userQueueStatus[entry.locationId];
-          if (!status) {
-            return;
-          }
-          status.joined = true;
-          status.nextNotified = false;
-          status.joinedAt = new Date(entry.joinedAt);
-          status.joinPosition = entry.joinPosition || null;
-          status.served = false;
-        });
-      }
-
-      function restoreMembershipDemoPush(sid) {
         if (!sid) {
           return;
         }
@@ -584,9 +406,7 @@
       // ============================================
 
       /**
-       * Demo fallback: pops the front member locally. In cloud mode the
-       * admin "Serve" buttons call completeCurrent() -> Firestore, and the
-       * snapshot does the advancing here on every device.
+       * Pops the front member locally when the serve timer fires.
        */
       function serveNext(locationId) {
         var queue = getQueue(locationId);
@@ -598,9 +418,6 @@
       }
 
       function restartServeTimer(locationId) {
-        if (isCloud()) {
-          return; // service is driven by the admin/cloud, not a local timer
-        }
         var queue = getQueue(locationId);
         if (!queue) {
           return;
@@ -635,15 +452,11 @@
           queue: queue,
           servedMember: servedMember || null
         });
-        // Keep any open admin dashboard's "Now Serving" panels live in demo
-        // mode too (in cloud mode the snapshot already fires this).
+        // Keep any open admin dashboard's "Now Serving" panels live.
         $rootScope.$broadcast('db:changed', { source: 'queue', locationId: locationId });
       }
 
       function mirrorQueueToDb(locationId) {
-        if (isCloud()) {
-          return; // truth lives in Firestore, not the legacy DB mirror
-        }
         try {
           var queue = getQueue(locationId);
           if (!queue || !DatabaseService) { return; }
@@ -868,61 +681,10 @@
           return deferred.promise;
         }
 
-        var run = function () {
-          if (isCloud()) {
-            joinQueueCloud(locationId, studentId).then(
-              function (res) { deferred.resolve(res); },
-              function (err) { deferred.reject(err); }
-            );
-          } else {
-            demoJoinQueue(locationId, studentId).then(
-              function (res) { deferred.resolve(res); },
-              function (err) { deferred.reject(err); }
-            );
-          }
-        };
-
-        if (cloudEligible() && !cloudBootstrapped) {
-          cloudSeedPromise.then(run, run);
-        } else {
-          run();
-        }
-
-        return deferred.promise;
-      }
-
-      function joinQueueCloud(locationId, studentId) {
-        var deferred = $q.defer();
-        var queue = getQueue(locationId);
-        var status = userQueueStatus[locationId];
-
-        FirestoreService.joinQueue(locationId, studentId)
-          .then(function (res) {
-            pendingJoin[locationId] = true;
-            status.joined = true;
-            status.served = false;
-            status.nextNotified = false;
-            status.joinedAt = new Date();
-            status.position = res.position || null;
-            status.joinPosition = res.position || null;
-
-            persistMembership();
-            broadcastQueueUpdated(locationId, null);
-
-            showToast(
-              'You joined the ' + queue.title + ' queue.' +
-              (res.position ? ' Spot #' + res.position + '.' : ''),
-              'success'
-            );
-
-            deferred.resolve({ queue: queue, status: status, position: res.position });
-          })
-          .catch(function (err) {
-            pendingJoin[locationId] = false;
-            status.joined = false;
-            status.position = null;
-            deferred.reject(err);
-          });
+        demoJoinQueue(locationId, studentId).then(
+          function (res) { deferred.resolve(res); },
+          function (err) { deferred.reject(err); }
+        );
 
         return deferred.promise;
       }
@@ -987,68 +749,10 @@
           return deferred.promise;
         }
 
-        var run = function () {
-          if (isCloud()) {
-            leaveQueueCloud(locationId, studentId).then(
-              function (res) { deferred.resolve(res); },
-              function (err) { deferred.reject(err); }
-            );
-          } else {
-            demoLeaveQueue(locationId, studentId).then(
-              function (res) { deferred.resolve(res); },
-              function (err) { deferred.reject(err); }
-            );
-          }
-        };
-
-        if (cloudEligible() && !cloudBootstrapped) {
-          cloudSeedPromise.then(run, run);
-        } else {
-          run();
-        }
-
-        return deferred.promise;
-      }
-
-      function leaveQueueCloud(locationId, studentId) {
-        var deferred = $q.defer();
-        var queue = getQueue(locationId);
-        var status = userQueueStatus[locationId];
-
-        FirestoreService.leaveQueue(locationId, studentId)
-          .then(function () {
-            var now = new Date();
-            var elapsed = status.joinedAt ? Math.round((now.getTime() - status.joinedAt.getTime()) / 60000) : 0;
-            var waitEstimate = status.joinPosition ? (status.joinPosition - 1) * queue.timePerPerson : elapsed;
-
-            UserService.addQueueHistory({
-              locationId: locationId,
-              joinedAt: status.joinedAt || now,
-              servedAt: null,
-              leftAt: now,
-              status: 'Left early',
-              waitTimeMinutes: Math.max(0, Math.round(waitEstimate))
-            });
-
-            status.joined = false;
-            status.position = null;
-            status.peopleAhead = null;
-            status.minutesUntilTurn = null;
-            status.served = false;
-            status.nextNotified = false;
-            status.joinPosition = null;
-            status.joinedAt = null;
-            pendingJoin[locationId] = false;
-
-            persistMembership();
-            broadcastQueueUpdated(locationId, null);
-            showToast('You left the ' + queue.title + ' queue.', 'info');
-
-            deferred.resolve({ queue: queue, status: status });
-          })
-          .catch(function (err) {
-            deferred.reject(err);
-          });
+        demoLeaveQueue(locationId, studentId).then(
+          function (res) { deferred.resolve(res); },
+          function (err) { deferred.reject(err); }
+        );
 
         return deferred.promise;
       }
@@ -1107,11 +811,11 @@
       /**
        * Whenever something meaningful about a member changes (e.g. a photostat
        * job is confirmed + attached to the member document), call this so the
-       * admin "Now Serving" panel shows the true payload in real time.
+       * admin "Now Serving" panel shows the true payload.
        * @param {string} locationId
        * @param {Object} request - payload: { orderNo, serviceId, serviceLabel,
        *   pages, copies, color, sides, files, amount, paymentLabel, paidAt }
-       * @returns {Promise<{ok:boolean, degraded?:boolean}>}
+       * @returns {Promise<{ok:boolean}>}
        */
       function setRequestPayload(locationId, request) {
         var deferred = $q.defer();
@@ -1123,36 +827,21 @@
           return deferred.promise;
         }
 
-        function finalize() {
-          // Update the local mirror immediately (single-tab UX cookies along).
-          for (var i = 0; i < queue.members.length; i++) {
-            if (queue.members[i].studentId === sid) {
-              queue.members[i].request = request;
-              break;
-            }
+        for (var i = 0; i < queue.members.length; i++) {
+          if (queue.members[i].studentId === sid) {
+            queue.members[i].request = request;
+            break;
           }
-          broadcastQueueUpdated(locationId, null);
-          deferred.resolve({ ok: true });
         }
-
-        if (isCloud()) {
-          FirestoreService.saveRequest(locationId, sid, request)
-            .then(function () { finalize(); })
-            .catch(function (err) {
-              console.warn('QueueSync: request payload write failed (degraded mode).', err);
-              finalize();
-            });
-        } else {
-          finalize();
-        }
+        broadcastQueueUpdated(locationId, null);
+        deferred.resolve({ ok: true });
 
         return deferred.promise;
       }
 
       /**
-       * THE single admin action to serve the current request. Atomically
-       * archives + deletes the first queue entry (cloud) or pops it locally
-       * (demo), so the next person becomes "Now Serving" on every device.
+       * The single admin action to serve the current request. Archives the
+       * request locally so the next person becomes "Now Serving".
        * @param {string} locationId 'canteen' | 'photostat'
        * @returns {Promise<{studentId:string, data:Object, request:Object|null}|null>}
        */
@@ -1165,38 +854,18 @@
           return deferred.promise;
         }
 
-        var run = function () {
-          if (isCloud()) {
-            FirestoreService.completeRequest(locationId)
-              .then(function (res) {
-                broadcastQueueUpdated(locationId, null);
-                deferred.resolve(res);
-              })
-              .catch(function (err) {
-                deferred.reject(err);
-              });
-            return;
-          }
-
-          // Demo fallback: pop the front member locally.
-          if (!queue.members.length) {
-            deferred.resolve(null);
-            return;
-          }
-          var served = queue.members.shift();
-          finalizeQueueState(locationId, served);
-          deferred.resolve({
-            studentId: served.studentId,
-            data: served,
-            request: served.request || null
-          });
-        };
-
-        if (cloudEligible() && !cloudBootstrapped) {
-          cloudSeedPromise.then(run, run);
-        } else {
-          run();
+        if (!queue.members.length) {
+          deferred.resolve(null);
+          return deferred.promise;
         }
+
+        var served = queue.members.shift();
+        finalizeQueueState(locationId, served);
+        deferred.resolve({
+          studentId: served.studentId,
+          data: served,
+          request: served.request || null
+        });
 
         return deferred.promise;
       }
@@ -1221,30 +890,10 @@
           return deferred.promise;
         }
 
-        var run = function () {
-          if (isCloud()) {
-            FirestoreService.updateFeedback(locationId, studentId, statusValue)
-              .catch(function (err) { console.warn('QueueSync: feedback write failed.', err); });
-            applyLocalLiveReport(locationId, studentId, statusValue);
-            var aggregate = getLiveStatus(locationId);
-            deferred.resolve(aggregate);
-            $rootScope.$broadcast('queue:liveStatus', {
-              locationId: locationId,
-              liveStatus: aggregate
-            });
-          } else {
-            demoUpdateLiveStatus(locationId, studentId, statusValue).then(
-              function (agg) { deferred.resolve(agg); },
-              function (err) { deferred.reject(err); }
-            );
-          }
-        };
-
-        if (cloudEligible() && !cloudBootstrapped) {
-          cloudSeedPromise.then(run, run);
-        } else {
-          run();
-        }
+        demoUpdateLiveStatus(locationId, studentId, statusValue).then(
+          function (agg) { deferred.resolve(agg); },
+          function (err) { deferred.reject(err); }
+        );
 
         return deferred.promise;
       }
@@ -1292,15 +941,13 @@
       }
 
       /**
-       * Demo helper: rescale how fast simulated minutes pass.
+       * Rescale how fast simulated minutes pass.
        */
       function setSimulationSpeed(factor) {
         SIMULATION_SPEED = factor || 1;
-        if (!isCloud()) {
-          Object.keys(queues).forEach(function (locationId) {
-            restartServeTimer(locationId);
-          });
-        }
+        Object.keys(queues).forEach(function (locationId) {
+          restartServeTimer(locationId);
+        });
         return SIMULATION_SPEED;
       }
 
@@ -1310,8 +957,6 @@
 
       /**
        * Clears in-memory demo state + user membership on logout.
-       * Cloud queues (the live Firestore members) are intentionally left
-       * intact — the queue belongs to everyone, not the session.
        */
       function resetDemoData() {
         ['canteen', 'photostat'].forEach(function (locationId) {
@@ -1332,17 +977,14 @@
           status.joinPosition = null;
           status.joinedAt = null;
         });
-        pendingJoin = { canteen: false, photostat: false };
         persistMembership();
-        if (!cloudEligible()) {
-          demoInitQueues();
-        }
+        demoInitQueues();
       }
 
       // ============================================
       //              INITIALIZATION
       // ============================================
-      initQueues();
+      demoInitQueues();
       restoreMembership();
 
       return {

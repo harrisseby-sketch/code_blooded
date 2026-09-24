@@ -5,10 +5,9 @@
    demo services, so a user's cart survives
    navigation (and refresh) while logged in.
 
-   TODO(Firebase): menu items become a Firestore
-   collection (canteen/menu) and each order is
-   written to orders/{orderNo} so the kitchen
-   counter sees it in real time.
+   TODO: menu items become a shared collection
+   and each order is written to a shared order log
+   so the kitchen counter sees it in real time.
    ============================================ */
 
 (function () {

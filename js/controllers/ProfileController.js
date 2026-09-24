@@ -28,7 +28,6 @@
 
       /**
        * Reads the Recent Queues list (from session-backed UserService).
-       * TODO(Firebase): becomes onSnapshot on users/{studentId}/history.
        */
       function loadHistory() {
         $scope.history = UserService.getQueueHistory();
